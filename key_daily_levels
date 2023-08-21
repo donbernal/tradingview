@@ -1,0 +1,144 @@
+//  ________________                                        
+//  ___  __ )_____(_)___________________ ____  ________ ___ 
+//  __  __  |____  /_  __ \_  ___/_  __ `/  / / /_  __ `__ \
+//  _  /_/ /____  / / /_/ /  /   _  /_/ // /_/ /_  / / / / /
+//  /_____/ ___  /  \____//_/    _\__, / \__,_/ /_/ /_/ /_/ 
+//          /___/                /____/                     
+
+//@version=0
+
+indicator("Key Previous and Pre-Market Daily Levels", shorttitle="Key Levels", overlay=true, max_lines_count=500, max_labels_count=500))
+
+// SessionHigh() returns the highest price during the specified 
+// session, optionally corrected for the given time zone.
+// Returns 'na' when the session hasn't started or isn't on the chart.
+SessionHigh(sessionTime, sessionTimeZone=syminfo.timezone) =>
+    insideSession = not na(time(timeframe.period, sessionTime, sessionTimeZone)) 
+    //newDay needed when only using RTH to dsitinguish between new day
+    newDay = dayofweek != dayofweek[1]
+    var float sessionHighPrice = na
+
+    if insideSession and (not insideSession[1] or newDay)
+        sessionHighPrice := high
+    else if insideSession
+        sessionHighPrice := math.max(sessionHighPrice, high)
+        
+    sessionHighPrice
+
+// SessionLow() returns the lowest price during the given session,
+// optionally corrected for the specified time zone.
+// Returns 'na' when the session hasn't started or isn't on the chart.
+SessionLow(sessionTime, sessionTimeZone=syminfo.timezone) =>
+    insideSession = not na(time(timeframe.period, sessionTime, sessionTimeZone))
+    //newDay needed when only using RTH to dsitinguish between new day
+    newDay = dayofweek != dayofweek[1]
+    var float sessionLowPrice = na
+
+    if insideSession and (not insideSession[1] or newDay)
+        sessionLowPrice := low
+    else if insideSession
+        sessionLowPrice := math.min(sessionLowPrice, low)
+    
+    sessionLowPrice
+
+// MonthName() returns the lowest price during the given session,
+// optionally corrected for the specified time zone.
+// Returns 'na' when the session hasn't started or isn't on the chart.
+MonthName(monthInput, sessionTimeZone=syminfo.timezone) =>
+    string monthName = switch monthInput
+        1 => "Jan"
+        2 => "Feb"
+        3 => "Mar"
+        4 => "Apr"
+        5 => "May"
+        6 => "Jun"
+        7 => "Jul"
+        8 => "Aug"
+        9 => "Sep"
+        10 => "Oct"
+        11 => "Nov"
+        12 => "Dec"
+
+    monthName
+///////////////////////////////////////////////////////
+//////////   End Functions Section    /////////////////
+///////////////////////////////////////////////////////
+
+//variable declarations
+//session times variables
+//Stocks/Crypto
+//PreMarket Trading Hours (1:00 AM - 6:29 AM)
+pmSess     = "0000-0630"
+
+//Regular trading hours (6:30 AM PST - 12:59PM PST)
+//Futures regular session (6:30 AM PST - 1:59PM PST)
+regSess    = "0630-1259"
+futRegSess = "0630-1259"
+inRegSess  = not na(time(timeframe.period, regSess, "America/Los_Angeles"))
+firstBarRegSess = session.isfirstbar_regular
+
+//Post Market Trading (1:00 PM PST - 5:00PM PST)
+postSess   = "1300-2059"
+//Futures
+//Regular trading hours (6:30 AM PST - 1:00PM)
+//Globex Trading Hours (3:00 PM - 6:29 AM)
+inMornGlobex = not na(time(timeframe.period, "0000-0629"))
+inEveGlobex  = not na(time(timeframe.period, "1800-2059"))
+//Booleans for if it is a new day, week, month
+newDay = dayofweek != dayofweek[1]
+newWeek = dayofweek[1] > dayofweek ? 1 : 0
+newMonth = dayofmonth[1] > dayofmonth
+
+//Groups
+var dailyGroup = "Daily Levels"
+var weeklyGroup = "Weekly Levels"
+var monthlyGroup = "Monthly Levels"
+
+//Input for level colors
+showDailyLevels = input.bool(true, title='Show Daily Levels',  group=dailyGroup)
+//Today's Open (6:30 AM open on stocks, globex on futures), RTH Open (when using futures)
+openColor       = input.color(title='', defval=color.white,  group=dailyGroup, inline='1')
+showTodayOpen   = input.bool(true, title='Today Open    ',      group=dailyGroup, inline='1')
+rthOpenColor    = input.color(title='', defval=color.orange, group=dailyGroup, inline='1')
+showRthOpen     = input.bool(true, title='RTH Open',           group=dailyGroup, inline='1')
+
+//Previous Day High/Low
+prevHighColor   = input.color(title='', defval=color.green,  group=dailyGroup, inline='2')
+showPrevHigh    = input.bool(true, title='Previous Day High',  group=dailyGroup, inline='2')
+prevLowColor    = input.color(title='', defval=color.green,  group=dailyGroup, inline='2')
+showPrevLow     = input.bool(true, title='Previous Day Low',   group=dailyGroup, inline='2')
+
+//Previous Day 50% and Previous Day Close
+midColor        = input.color(title='', defval=color.yellow, group=dailyGroup, inline='3')
+showPrevMid     = input.bool(true, title='Previous Day 50% ',  group=dailyGroup, inline='3')
+prevCloseColor  = input.color(title='', defval=color.aqua,   group=dailyGroup, inline='3')
+showPrevClose   = input.bool(true, title='Previous Close',     group=dailyGroup, inline='3')
+
+//T2 High/Low
+t2HighColor     = input.color(title='', defval=color.red,    group=dailyGroup, inline='4')
+showT2High      = input.bool(true, title='T+2 High    ',       group=dailyGroup, inline='4')
+t2LowColor      = input.color(title='', defval=color.red,    group=dailyGroup, inline='4')
+showT2Low       = input.bool(true, title='T+2 Low',            group=dailyGroup, inline='4')
+
+//Overnight High/Low
+onHighColor     = input.color(title='', defval=color.purple, group=dailyGroup, inline='5')
+showOnHigh      = input.bool(true, title='Overnight High  ',   group=dailyGroup, inline='5')
+onLowColor      = input.color(title='', defval=color.purple, group=dailyGroup, inline='5')
+showOnLow       = input.bool(true, title='Overnight Low',      group=dailyGroup, inline='5')
+
+/Daily Settings
+numDailyPeriods   = input.int(title='Number of Previous Days', defval=0, group = dailyGroup)
+extendOptionDaily = input.string(title='Extend Daily Lines', options=["Right","Both", "None"], defval="Right", group = dailyGroup)
+extendLineDaily   = (extendOptionDaily == 'Right') ? extend.right :
+                     (extendOptionDaily == 'Both') ? extend.both :
+                     extend.none
+linewidthDaily    = input.int(1, "Daily Line Thickness", group = dailyGroup)
+styleOptionDaily  = input.string(title='Daily Line Style', options=["solid (─)", "dashed (╌)", "dotted (┈)"], defval="solid (─)", group = dailyGroup)
+lineStyleDaily    = (styleOptionDaily == "dotted (┈)") ? line.style_dotted : 
+                   (styleOptionDaily == "dashed (╌)") ? line.style_dashed :
+                   line.style_solid
+labelColorDaily   = input.color(title='', defval=color.white, group = dailyGroup, inline='labelDaily')
+showDailyLabels   = input.bool(title='Show Daily Level Labels', defval=true, group = dailyGroup, inline='labelDaily')
+
+labeloffsetDaily  = input.int(title='Daily Label Offset', defval=10, group = dailyGroup)
+
