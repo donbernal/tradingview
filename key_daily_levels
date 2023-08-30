@@ -142,3 +142,615 @@ showDailyLabels   = input.bool(title='Show Daily Level Labels', defval=true, gro
 
 labeloffsetDaily  = input.int(title='Daily Label Offset', defval=10, group = dailyGroup)
 
+///////////////////////////
+//  Weekly Levels Inputs //
+///////////////////////////
+showWeeklyLevels    = input.bool(true, title='Show Weekly Levels',  group=weeklyGroup)
+wkLowColor          = input.color(title='', defval=color.red,    group=weeklyGroup, inline='6')
+showPrevWeeklyLow   = input.bool(true, title='Previous Weekly Low',   group=weeklyGroup, inline='6')
+wkHalfColor         = input.color(title='', defval=color.yellow, group=weeklyGroup, inline='7')
+showPrevWeeklyHalf  = input.bool(true, title='Previous Weekly 50%',   group=weeklyGroup, inline='7')
+wkHighColor         = input.color(title='', defval=color.red,    group=weeklyGroup, inline='8')
+showPrevWeeklyHigh  = input.bool(true, title='Previous Weekly High',  group=weeklyGroup, inline='8')
+
+//Weekly Settings
+numWklyPeriods     = input.int(title='Number of Previous Weeks', defval=0, group = weeklyGroup)
+extendOptionWeekly = input.string(title='Extend Weekly Lines', options=["Right","Both", "None"], defval="Right", group = weeklyGroup)
+extendLineWeekly   = (extendOptionWeekly == 'Right') ? extend.right :
+                     (extendOptionWeekly == 'Both') ? extend.both :
+                     extend.none
+linewidthWeekly    = input.int(1, "Weekly Line Thickness", group = weeklyGroup)
+styleOptionWeekly  = input.string(title='Weekly Line Style', options=["solid (─)", "dashed (╌)", "dotted (┈)"], defval="dotted (┈)", group = weeklyGroup)
+lineStyleWeekly    = (styleOptionWeekly == "dotted (┈)") ? line.style_dotted : 
+                     (styleOptionWeekly == "dashed (╌)") ? line.style_dashed :
+                     line.style_solid
+labelColorWeekly   = input.color(title='', defval=color.white, group = weeklyGroup, inline='labelWeekly')
+showWeeklyLabels   = input.bool(title='Weekly Show Weekly Level Labels', defval=true, group = weeklyGroup, inline='labelWeekly')
+labeloffsetWeekly  = input.int(title='Weekly Label Offset', defval=10, group = weeklyGroup)
+
+////////////////////////////
+//  Monthly Levels Inputs //
+////////////////////////////
+showMonthlyLevels  = input.bool(title='Show Monthly Levels', defval=true, group = monthlyGroup)
+monLowColor         = input.color(title='', defval=color.orange, group=monthlyGroup, inline='9')
+showPrevMonthlyLow  = input.bool(true, title='Previous Monthly Low',  group=monthlyGroup, inline='9')
+monHalfColor        = input.color(title='', defval=color.yellow, group=monthlyGroup, inline='10')
+showPrevMonthlyHalf = input.bool(true, title='Previous Monthly 50%',  group=monthlyGroup, inline='10')
+monHighColor        = input.color(title='', defval=color.orange, group=monthlyGroup, inline='11')
+showPrevMonthlyHigh = input.bool(true, title='Previous Monthly High', group=monthlyGroup, inline='11')
+
+//Monthly Settings
+numMonPeriods       = input.int(title='Number of Previous Months', defval=0, group = monthlyGroup)
+extendOptionMonthly = input.string(title='Extend Monthly Lines', options=["Right","Both", "None"], defval="Right", group = monthlyGroup)
+extendLineMonthly   = (extendOptionMonthly == 'Right') ? extend.right :
+                     (extendOptionMonthly == 'Both') ? extend.both :
+                     extend.none
+linewidthMonthly    = input.int(1, "Line Thickness", group = monthlyGroup)
+styleOptionMonthly  = input.string(title='Line Style', options=["solid (─)", "dashed (╌)", "dotted (┈)"], defval="dashed (╌)", group = monthlyGroup)
+lineStyleMonthly    = (styleOptionMonthly == "dotted (┈)") ? line.style_dotted : 
+                      (styleOptionMonthly == "dashed (╌)") ? line.style_dashed :
+                      line.style_solid
+labelColorMonthly   = input.color(title='', defval=color.white, group = monthlyGroup, inline='labelMonthly')
+showMonthlyLabels   = input.bool(title='Show Monthly Level Labels', defval=true, group = monthlyGroup, inline='labelMonthly')
+labeloffsetMonthly  = input.int(title='Monthly Label Offset', defval=10, group = monthlyGroup)
+
+//Array Initialization
+arrCountDaily                = 0
+arrCountWeekly               = 0
+arrCountMonthly              = 0
+LABEL_DESC                   = array.new<string>(0)
+LINE_COLOR                   = array.new_color(0)
+dailyLevels                  = array.new<float>(0)
+weeklyLevels                 = array.new<float>(0)
+monthlyLevels                = array.new<float>(0)
+var line[] LINES_DAILY       = array.new_line(0)
+var label[] LABELS_DAILY     = array.new_label(0)
+var line[] LINES_WEEKLY      = array.new_line(0)
+LABEL_DESC_WEEKLY            = array.new<string>(0)
+var label[] LABELS_WEEKLY    = array.new_label(0)
+var line[] LINES_MONTHLY     = array.new_line(0)
+LABEL_DESC_MONTHLY           = array.new<string>(0)
+var label[] LABELS_MONTHLY   = array.new_label(0)
+
+//Daily Levels
+todayOpen   = request.security(syminfo.tickerid, "D", open, lookahead=barmerge.lookahead_on)
+prevHigh    = SessionHigh(regSess, "America/Los_Angeles")[1]
+prevLow     = SessionLow(regSess, "America/Los_Angeles")[1]
+prevMid     = (prevHigh + prevLow) / 2
+prevClose   = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on)
+t2High      = request.security(syminfo.tickerid, "D", high[2], lookahead=barmerge.lookahead_on)
+t2Low       = request.security(syminfo.tickerid, "D", low[2], lookahead=barmerge.lookahead_on)
+
+//Weekly Levels
+[prevWkHigh, currWkHigh, prevWkLow, currWkLow, prevWkTime, currWkTime]  = request.security(syminfo.tickerid, "W", [high[1], high, low[1], low, time[1], time], lookahead=barmerge.lookahead_on)
+prevWkMid   = (prevWkHigh + prevWkLow) / 2
+currWkMid   = (currWkHigh + currWkLow) / 2
+
+//New month starts at beginning of premarket while weekly values from request security do not update until the start of the regular session
+//Fixes this mismatch of data being behind when ETH is enabled.
+if syminfo.session == session.extended and newWeek
+    prevWkHigh := currWkHigh
+    prevWkLow  := currWkLow
+    prevWkMid  := currWkMid
+    prevWkTime := currWkTime
+
+//Monthly Levels
+[prevMonHigh, currMonHigh, prevMonLow, currMonLow, prevMonTime] = request.security(syminfo.tickerid, "M", [high[1], high, low[1], low, time[1]], lookahead=barmerge.lookahead_on)
+prevMonMid  = (prevMonHigh + prevMonLow) / 2
+currMonMid  = (currMonHigh + currMonLow) / 2
+prevMonVal  = month(prevMonTime)
+
+//Recalculate when it is a futures ticker due to new monthly candle starting during Globex which is the evening before the actual start of a new month. 
+//Fixes the name mismatch that happens because of this. Shifts the month to reflect the correct month.
+if syminfo.type == "futures" and newMonth and not inRegSess
+    if prevMonVal == 12
+        prevMonVal := 1
+    else 
+        prevMonVal := prevMonVal + 1
+
+//New month starts at beginning of premarket while weekly values from request security do not update until the start of the regular session
+//Fixes this mismatch of data being behind when ETH is enabled.
+if syminfo.session == session.extended and newMonth
+    prevMonHigh := currMonHigh
+    prevMonLow  := currMonLow
+    prevMonMid  := currMonMid
+    prevMonVal := month(time[1])
+
+//Overnight Levels
+pmHigh      = request.security(ticker.modify(syminfo.tickerid, session.extended), "30", SessionHigh(pmSess, "America/Los_Angeles"), lookahead=barmerge.lookahead_on)
+pmLow       = request.security(ticker.modify(syminfo.tickerid, session.extended), "30", SessionLow(pmSess, "America/Los_Angeles"), lookahead=barmerge.lookahead_on)
+ahHigh      = request.security(ticker.modify(syminfo.tickerid, session.extended), "30", SessionHigh(postSess, "America/Los_Angeles"), lookahead=barmerge.lookahead_on)
+ahLow       = request.security(ticker.modify(syminfo.tickerid, session.extended), "30", SessionLow(postSess, "America/Los_Angeles"), lookahead=barmerge.lookahead_on)
+onHigh      = (pmHigh > ahHigh) ? pmHigh : ahHigh
+onLow       = (pmLow < ahLow) ? pmLow : ahLow
+
+//Pushing values collected above into a label description, line color, and level values
+if showDailyLevels == true    
+    if showTodayOpen == true
+        if syminfo.type != "futures"
+            array.push(LABEL_DESC, 'Todays Open:')
+        else
+            array.push(LABEL_DESC, 'Globex Open:')
+        array.push(LINE_COLOR, openColor)
+        array.push(dailyLevels, todayOpen)
+        arrCountDaily += 1
+
+    if showPrevHigh == true
+        array.push(LABEL_DESC, 'Prev Day High:')
+        array.push(LINE_COLOR, prevHighColor)
+        array.push(dailyLevels, prevHigh)
+        arrCountDaily += 1
+
+    if showPrevLow == true   
+        array.push(LABEL_DESC, 'Prev Day Low:')
+        array.push(LINE_COLOR, prevLowColor)
+        array.push(dailyLevels, prevLow)
+        arrCountDaily += 1
+
+    if showPrevMid == true
+        array.push(LABEL_DESC, 'Prev Day 50%:')
+        array.push(LINE_COLOR, midColor)
+        array.push(dailyLevels, prevMid)
+        arrCountDaily += 1
+
+    if showPrevClose == true
+        array.push(LABEL_DESC, 'Prev Day Close:')
+        array.push(LINE_COLOR, prevCloseColor)
+        array.push(dailyLevels, prevClose)
+        arrCountDaily += 1
+
+    //T+2 Settlement High/Low (settlement levels)
+    if showT2High == true
+        array.push(LABEL_DESC, 'T+2 High:')
+        array.push(LINE_COLOR, t2HighColor)
+        array.push(dailyLevels, t2High)
+        arrCountDaily += 1
+        
+    if showT2Low == true
+        array.push(LABEL_DESC, 'T+2 Low:')
+        array.push(LINE_COLOR, t2LowColor)
+        array.push(dailyLevels, t2Low)
+        arrCountDaily += 1
+
+    //Overnight Levels
+    if showOnHigh == true
+        array.push(LABEL_DESC, 'Overnight High:')
+        array.push(LINE_COLOR, onHighColor)
+        array.push(dailyLevels, onHigh)
+        arrCountDaily += 1
+    if showOnLow == true
+        array.push(LABEL_DESC, 'Overnight Low:')
+        array.push(LINE_COLOR, onLowColor)
+        array.push(dailyLevels, onLow)
+        arrCountDaily += 1
+
+    if showRthOpen == true and syminfo.type == "futures"
+        array.push(LABEL_DESC, 'RTH Open:')
+        array.push(LINE_COLOR, rthOpenColor)
+        arrCountDaily += 1
+
+//Longer Term Levels
+//Weekly Levels
+if showWeeklyLevels == true
+    if showPrevWeeklyHigh == true
+        array.push(LABEL_DESC_WEEKLY, "Week of " + MonthName(month(prevWkTime)) + " " + str.tostring(dayofmonth(prevWkTime)) + " High: ")
+        array.push(LINE_COLOR, wkHighColor)
+        array.push(weeklyLevels, prevWkHigh)
+        arrCountWeekly += 1
+
+    if showPrevWeeklyLow == true
+        array.push(LABEL_DESC_WEEKLY, "Week of " + MonthName(month(prevWkTime)) + " " + str.tostring(dayofmonth(prevWkTime)) + " Low: ")
+        array.push(LINE_COLOR, wkLowColor)
+        array.push(weeklyLevels, prevWkLow)
+        arrCountWeekly += 1
+
+    if showPrevWeeklyHalf == true
+        array.push(LABEL_DESC_WEEKLY, "Week of " + MonthName(month(prevWkTime)) + " " + str.tostring(dayofmonth(prevWkTime)) + " 50%: ")
+        array.push(LINE_COLOR, wkHalfColor)
+        array.push(weeklyLevels, prevWkMid)
+        arrCountWeekly += 1
+
+//Monthly Levels
+if showMonthlyLevels == true
+    if showPrevMonthlyHigh == true
+        array.push(LABEL_DESC_MONTHLY, MonthName(prevMonVal) + ' High: ')
+        array.push(LINE_COLOR, monHighColor)
+        array.push(monthlyLevels, prevMonHigh)
+        arrCountMonthly += 1
+
+    if showPrevMonthlyLow == true
+        array.push(LABEL_DESC_MONTHLY, MonthName(prevMonVal) + ' Low: ')
+        array.push(LINE_COLOR, monLowColor)
+        array.push(monthlyLevels, prevMonLow)
+        arrCountMonthly += 1
+
+    if showPrevMonthlyHalf == true
+        array.push(LABEL_DESC_MONTHLY, MonthName(prevMonVal) + ' 50%: ')
+        array.push(LINE_COLOR, monHalfColor)
+        array.push(monthlyLevels, prevMonMid)
+        arrCountMonthly += 1
+
+//determine if we are in futures change conditional due to different regular sessions open time
+//Futures Trading Starts vs. normal stocks
+if syminfo.type == "futures" 
+    firstBarRegSess := not inRegSess[1] and inRegSess
+
+//if we are on the first bar of the regular session, plot the daily levels collected above
+if firstBarRegSess and timeframe.isintraday and showDailyLevels
+    
+    //request the RTH open for both futures
+    rthOpen = open
+    if syminfo.type == "futures" and showRthOpen == true
+        array.push(dailyLevels, rthOpen)
+        
+    //Delete the labels from the previous day then clear the array
+    if array.size(LABELS_DAILY) > 0
+        for i=0 to array.size(LABELS_DAILY) - 1
+            label.delete(array.get(LABELS_DAILY, i))
+            
+        array.clear(LABELS_DAILY)
+     
+    if array.size(LINES_DAILY) > 0
+    
+        sizeArr = array.size(LINES_DAILY) - 1
+
+        for i = sizeArr to 0
+            //show number of lines based on user input, else just delete all lines
+            if i > sizeArr - (numDailyPeriods * arrCountDaily)
+                line.set_extend(array.get(LINES_DAILY,i), extendLineDaily)
+            else
+                line.delete(array.get(LINES_DAILY, i))
+                array.remove(LINES_DAILY, i)
+    
+    //create a new lines from DAILY_LEVELS prices
+    for i = 0 to (array.size(dailyLevels) - 1)
+        
+        if extendOptionDaily == 'Right' or extendOptionDaily == 'Both'
+            array.push(LINES_DAILY, line.new(bar_index, array.get(dailyLevels,i), bar_index, array.get(dailyLevels,i), color=array.get(LINE_COLOR,i), style=lineStyleDaily,width=linewidthDaily,extend=extendLineDaily))
+        else
+            array.push(LINES_DAILY, line.new(bar_index, array.get(dailyLevels,i), bar_index, array.get(dailyLevels,i), color=array.get(LINE_COLOR,i), style=lineStyleDaily,width=linewidthDaily))
+        
+        if showDailyLabels == true
+            array.push(LABELS_DAILY, label.new(bar_index + labeloffsetDaily, array.get(dailyLevels,i), array.get(LABEL_DESC,i) + str.tostring(array.get(dailyLevels,i), '#.00'), style=label.style_none))
+            label.set_textcolor(array.get(LABELS_DAILY,i), labelColorDaily)
+
+//extends line as more bars are printed on screen
+if array.size(LINES_DAILY) != 0
+    for i = 0 to (array.size(LINES_DAILY) - 1)
+        line.set_x2(array.get(LINES_DAILY,i), bar_index)
+        
+    if showDailyLabels == true
+        for i = 0 to arrCountDaily - 1
+            label.set_x(array.get(LABELS_DAILY,i), bar_index + labeloffsetDaily)
+
+///////////////////////////////
+//// Plotting Weekly Lines ////
+///////////////////////////////
+//if we are on a new week plot the weekly levels collected above
+if newWeek and showWeeklyLevels
+    //Delete the labels based on user input, otherwise delete all labels
+    if array.size(LABELS_WEEKLY) > 0
+        
+        sizeArr = array.size(LABELS_WEEKLY) - 1
+
+        for i = sizeArr to 0
+            if i <= sizeArr - (numWklyPeriods * arrCountWeekly)
+                label.delete(array.get(LABELS_WEEKLY, i))
+                array.remove(LABELS_WEEKLY, i)
+
+    if array.size(LINES_WEEKLY) > 0
+
+        sizeArr = array.size(LINES_WEEKLY) - 1 
+
+        for i = sizeArr to 0
+            //show number of lines based on user input, else just delete all lines
+            if i > sizeArr - (numWklyPeriods * arrCountWeekly)
+                line.set_extend(array.get(LINES_WEEKLY,i), extendLineWeekly)
+            else
+                line.delete(array.get(LINES_WEEKLY, i))
+                array.remove(LINES_WEEKLY, i)
+                
+    //create a new line from WEEKLY_LEVELS prices
+    for i = 0 to (array.size(weeklyLevels) - 1)
+        
+        if extendOptionWeekly == 'Right' or extendOptionWeekly == 'Both'
+            array.push(LINES_WEEKLY, line.new(prevWkTime, array.get(weeklyLevels,i), time, array.get(weeklyLevels,i), xloc.bar_time, color=array.get(LINE_COLOR, i + arrCountDaily), style=lineStyleWeekly,width=linewidthWeekly,extend=extendLineWeekly))
+        else
+            array.push(LINES_WEEKLY, line.new(prevWkTime, array.get(weeklyLevels,i), time, array.get(weeklyLevels,i), xloc.bar_time, color=array.get(LINE_COLOR, i + arrCountDaily), style=lineStyleWeekly,width=linewidthWeekly))
+        
+        if showWeeklyLabels == true
+            array.push(LABELS_WEEKLY, label.new(bar_index + labeloffsetWeekly, array.get(weeklyLevels,i), array.get(LABEL_DESC_WEEKLY, i) + str.tostring(array.get(weeklyLevels,i), '#.00'), style=label.style_none))
+            label.set_textcolor(array.get(LABELS_WEEKLY,i), labelColorWeekly)
+
+//extend current weekly lines as more bars are printed on screen
+if array.size(LINES_WEEKLY) != 0
+    for i = 0 to array.size(LINES_WEEKLY) - 1
+        line.set_x2(array.get(LINES_WEEKLY,i), time)
+        
+    if showWeeklyLabels == true
+        for i = 0 to array.size(LABELS_WEEKLY) - 1
+            label.set_x(array.get(LABELS_WEEKLY, i), bar_index + labeloffsetWeekly)
+            label.set_textcolor(array.get(LABELS_WEEKLY, i), labelColorWeekly)
+
+///////////////////////////////
+//// Plotting Monthly Lines ////
+///////////////////////////////
+//if we are on a new week plot the monthly levels collected above
+if newMonth and showMonthlyLevels
+    //Delete the labels based on user input, otherwise delete all labels
+    if array.size(LABELS_MONTHLY) > 0
+        
+        sizeArr = array.size(LABELS_MONTHLY) - 1
+
+        for i = sizeArr to 0
+            if i <= sizeArr - (numMonPeriods * arrCountMonthly)
+                label.delete(array.get(LABELS_MONTHLY, i))
+                array.remove(LABELS_MONTHLY, i)
+
+    if array.size(LINES_MONTHLY) > 0
+
+        sizeArr = array.size(LINES_MONTHLY) - 1 
+
+        for i = sizeArr to 0
+            //show number of lines based on user input, else just delete all lines
+            if i > sizeArr - (numMonPeriods * arrCountMonthly)
+                line.set_extend(array.get(LINES_MONTHLY,i), extendLineMonthly)
+            else
+                line.delete(array.get(LINES_MONTHLY, i))
+                array.remove(LINES_MONTHLY, i)
+                
+    //create a new line from MONTHLY_LEVELS prices
+    for i = 0 to (array.size(monthlyLevels) - 1)
+        
+        if extendOptionMonthly == 'Right' or extendOptionMonthly == 'Both'
+            array.push(LINES_MONTHLY, line.new(prevMonTime, array.get(monthlyLevels,i), time, array.get(monthlyLevels,i), xloc.bar_time, color=array.get(LINE_COLOR, i + arrCountDaily + arrCountWeekly), style=lineStyleMonthly,width=linewidthMonthly,extend=extendLineMonthly))
+        else
+            array.push(LINES_MONTHLY, line.new(prevMonTime, array.get(monthlyLevels,i), time, array.get(monthlyLevels,i), xloc.bar_time, color=array.get(LINE_COLOR, i + arrCountDaily + arrCountWeekly), style=lineStyleMonthly,width=linewidthMonthly))
+        
+        if showMonthlyLabels == true
+            array.push(LABELS_MONTHLY, label.new(bar_index + labeloffsetMonthly, array.get(monthlyLevels,i), array.get(LABEL_DESC_MONTHLY, i) + str.tostring(array.get(monthlyLevels,i), '#.00'), style=label.style_none))
+            label.set_textcolor(array.get(LABELS_MONTHLY,i), labelColorMonthly)    
+
+
+//extend current monthly lines as more bars are printed on screen
+if array.size(LINES_MONTHLY) != 0
+    for i = 0 to array.size(LINES_MONTHLY) - 1
+        line.set_x2(array.get(LINES_MONTHLY,i), time)
+        
+    if showMonthlyLabels == true
+        for i = 0 to array.size(LABELS_MONTHLY) - 1
+            label.set_x(array.get(LABELS_MONTHLY, i), bar_index + labeloffsetMonthly)
+            label.set_textcolor(array.get(LABELS_MONTHLY, i), labelColorMonthly)
+
+/////////////////////////////////
+// VWAP for Various Timeframes //
+/////////////////////////////////
+//variable declaration
+//Daily
+anchorDaily       = "1D"
+showDailyVwap     = input(true,      title="Daily VWAP",                   group="Daily VWAP Settings")
+showDailyBand_1   = input(false,     title="",                             group="Daily VWAP Settings",    inline="band_1")
+stdevDailyMult_1  = input(1.0,       title="Daily Band Multiplier #1",     group="Daily VWAP Settings",    inline="band_1")
+showDailyBand_2   = input(false,     title="",                             group="Daily VWAP Settings",    inline="band_2")
+stdevDailyMult_2  = input(2.0,       title="Daily Band Multiplier #2",     group="Daily VWAP Settings",    inline="band_2")
+showDailyBand_3   = input(false,     title="",                             group="Daily VWAP Settings",    inline="band_3")
+stdevDailyMult_3  = input(3.0,       title="Daily Band Multiplier #3",     group="Daily VWAP Settings",    inline="band_3")
+
+//Weekly
+anchorWeekly       = "1W"
+showWeeklyVwap     = input(true,     title="Weekly VWAP",                  group="Weekly VWAP Settings")
+showWeeklyBand_1   = input(false,    title="",                             group="Weekly VWAP Settings",   inline="band_1w")
+stdevWeeklyMult_1  = input(1.0,      title="Weekly Band Multiplier #1",    group="Weekly VWAP Settings",   inline="band_1w")
+showWeeklyBand_2   = input(false,    title="",                             group="Weekly VWAP Settings",   inline="band_2w")
+stdevWeeklyMult_2  = input(2.0,      title="Weekly Band Multiplier #2",    group="Weekly VWAP Settings",   inline="band_2w")
+showWeeklyBand_3   = input(false,    title="",                             group="Weekly VWAP Settings",   inline="band_3w")
+stdevWeeklyMult_3  = input(3.0,      title="Weekly Band Multiplier #3",    group="Weekly VWAP Settings",   inline="band_3w")
+
+//Monthly
+anchorMonthly       = "1M"
+showMonthlyVwap     = input(true,    title="Monthly VWAP",                 group="Monthly VWAP Settings")
+showMonthlyBand_1   = input(false,   title="",                             group="Monthly VWAP Settings",   inline="band_1m")
+stdevMonthlyMult_1  = input(1.0,     title="Monthly Band Multiplier #1",   group="Monthly VWAP Settings",   inline="band_1m")
+showMonthlyBand_2   = input(false,   title="",                             group="Monthly VWAP Settings",   inline="band_2m")
+stdevMonthlyMult_2  = input(2.0,     title="Monthly Band Multiplier #2",   group="Monthly VWAP Settings",   inline="band_2m")
+showMonthlyBand_3   = input(false,   title="",                             group="Monthly VWAP Settings",   inline="band_3m")
+stdevMonthlyMult_3  = input(3.0,     title="Monthly Band Multiplier #3",   group="Monthly VWAP Settings",   inline="band_3m")
+
+//Quarterly
+anchorQuarterly       = "3M"
+showQuarterlyVwap     = input(true,  title="Quarterly VWAP",               group="Quarterly VWAP Settings")
+showQuarterlyBand_1   = input(false, title="",                             group="Quarterly VWAP Settings", inline="band_1q")
+stdevQuarterlyMult_1  = input(1.0,   title="Quarterly Band Multiplier #1", group="Quarterly VWAP Settings", inline="band_1q")
+showQuarterlyBand_2   = input(false, title="",                             group="Quarterly VWAP Settings", inline="band_2q")
+stdevQuarterlyMult_2  = input(2.0,   title="Quarterly Band Multiplier #2", group="Quarterly VWAP Settings", inline="band_2q")
+showQuarterlyBand_3   = input(false, title="",                             group="Quarterly VWAP Settings", inline="band_3q")
+stdevQuarterlyMult_3  = input(3.0,   title="Quarterly Band Multiplier #3", group="Quarterly VWAP Settings", inline="band_3q")
+
+//Yearly
+anchorYearly       = "12M"
+showYearlyVwap     = input(true,     title="Yearly VWAP",                  group="Yearly VWAP Settings")
+showYearlyBand_1   = input(false,    title="",                             group="Yearly VWAP Settings",    inline="band_1y")
+stdevYearlyMult_1  = input(1.0,      title="Yearly Band Multiplier #1",    group="Yearly VWAP Settings",    inline="band_1y")
+showYearlyBand_2   = input(false,    title="",                             group="Yearly VWAP Settings",    inline="band_2y")
+stdevYearlyMult_2  = input(2.0,      title="Yearly Band Multiplier #2",    group="Yearly VWAP Settings",    inline="band_2y")
+showYearlyBand_3   = input(false,    title="",                             group="Yearly VWAP Settings",    inline="band_3y")
+stdevYearlyMult_3  = input(3.0,      title="Yearly Band Multiplier #3",    group="Yearly VWAP Settings",    inline="band_3y")
+
+//Daily VWAP Calculations
+[vwapDaily, upperDaily, lowerDaily] = ta.vwap(hlc3, timeframe.change(anchorDaily), 1)
+stdevDailyAbs = upperDaily - vwapDaily
+dailyUpperBandValue1 = vwapDaily + stdevDailyAbs * stdevDailyMult_1
+dailyLowerBandValue1 = vwapDaily - stdevDailyAbs * stdevDailyMult_1
+dailyUpperBandValue2 = vwapDaily + stdevDailyAbs * stdevDailyMult_2
+dailyLowerBandValue2 = vwapDaily - stdevDailyAbs * stdevDailyMult_2
+dailyUpperBandValue3 = vwapDaily + stdevDailyAbs * stdevDailyMult_3
+dailyLowerBandValue3 = vwapDaily - stdevDailyAbs * stdevDailyMult_3
+
+//Weekly VWAP Calculations
+[vwapWeekly, upperWeekly, lowerWeekly] = ta.vwap(hlc3, timeframe.change(anchorWeekly), 1)
+stdevWeeklyAbs = upperWeekly - vwapWeekly
+weeklyUpperBandValue1 = vwapWeekly + stdevWeeklyAbs * stdevWeeklyMult_1
+weeklyLowerBandValue1 = vwapWeekly - stdevWeeklyAbs * stdevWeeklyMult_1
+weeklyUpperBandValue2 = vwapWeekly + stdevWeeklyAbs * stdevWeeklyMult_2
+weeklyLowerBandValue2 = vwapWeekly - stdevWeeklyAbs * stdevWeeklyMult_2
+weeklyUpperBandValue3 = vwapWeekly + stdevWeeklyAbs * stdevWeeklyMult_3
+weeklyLowerBandValue3 = vwapWeekly - stdevWeeklyAbs * stdevWeeklyMult_3
+
+//Monthly VWAP Calculations
+[vwapMonthly, upperMonthly, lowerMonthly] = ta.vwap(hlc3, timeframe.change(anchorMonthly), 1)
+stdevMonthlyAbs = upperMonthly - vwapMonthly
+monthlyUpperBandValue1 = vwapMonthly + stdevMonthlyAbs * stdevMonthlyMult_1
+monthlyLowerBandValue1 = vwapMonthly - stdevMonthlyAbs * stdevMonthlyMult_1
+monthlyUpperBandValue2 = vwapMonthly + stdevMonthlyAbs * stdevMonthlyMult_2
+monthlyLowerBandValue2 = vwapMonthly - stdevMonthlyAbs * stdevMonthlyMult_2
+monthlyUpperBandValue3 = vwapMonthly + stdevMonthlyAbs * stdevMonthlyMult_3
+monthlyLowerBandValue3 = vwapMonthly - stdevMonthlyAbs * stdevMonthlyMult_3
+
+//Quarterly VWAP Calculations
+[vwapQuarterly, upperQuarterly, lowerQuarterly] = ta.vwap(hlc3, timeframe.change(anchorQuarterly), 1)
+stdevQuarterlyAbs = upperQuarterly - vwapQuarterly
+quarterlyUpperBandValue1 = vwapQuarterly + stdevQuarterlyAbs * stdevQuarterlyMult_1
+quarterlyLowerBandValue1 = vwapQuarterly - stdevQuarterlyAbs * stdevQuarterlyMult_1
+quarterlyUpperBandValue2 = vwapQuarterly + stdevQuarterlyAbs * stdevQuarterlyMult_2
+quarterlyLowerBandValue2 = vwapQuarterly - stdevQuarterlyAbs * stdevQuarterlyMult_2
+quarterlyUpperBandValue3 = vwapQuarterly + stdevQuarterlyAbs * stdevQuarterlyMult_3
+quarterlyLowerBandValue3 = vwapQuarterly - stdevQuarterlyAbs * stdevQuarterlyMult_3
+
+//Yearly VWAP Calculations
+[vwapYearly, upperYearly, lowerYearly] = ta.vwap(hlc3, timeframe.change(anchorYearly), 1)
+stdevYearlyAbs = upperYearly - vwapYearly
+yearlyUpperBandValue1 = vwapYearly + stdevYearlyAbs * stdevYearlyMult_1
+yearlyLowerBandValue1 = vwapYearly - stdevYearlyAbs * stdevYearlyMult_1
+yearlyUpperBandValue2 = vwapYearly + stdevYearlyAbs * stdevYearlyMult_2
+yearlyLowerBandValue2 = vwapYearly - stdevYearlyAbs * stdevYearlyMult_2
+yearlyUpperBandValue3 = vwapYearly + stdevYearlyAbs * stdevYearlyMult_3
+yearlyLowerBandValue3 = vwapYearly - stdevYearlyAbs * stdevYearlyMult_3
+
+//Daily VWAP Plots
+plot(vwapDaily,                title="Daily VWAP",          color=color.rgb(255, 255, 255), offset=0, display = showDailyVwap ? display.pane : display.none)
+plot(dailyUpperBandValue1,     title="Daily Upper Band #1", color=color.green, offset=0, display = showDailyBand_1 ? display.pane : display.none)
+plot(dailyLowerBandValue1,     title="Daily Lower Band #1", color=color.green, offset=0, display = showDailyBand_1 ? display.pane : display.none)
+plot(dailyUpperBandValue2,     title="Daily Upper Band #2", color=color.olive, offset=0, display = showDailyBand_2 ? display.pane : display.none)
+plot(dailyLowerBandValue2,     title="Daily Lower Band #2", color=color.olive, offset=0, display = showDailyBand_2 ? display.pane : display.none)
+plot(dailyUpperBandValue3,     title="Daily Upper Band #3", color=color.teal, offset=0, display = showDailyBand_3 ? display.pane : display.none)
+plot(dailyLowerBandValue3,     title="Daily Lower Band #3", color=color.teal, offset=0, display = showDailyBand_3 ? display.pane : display.none)
+
+//Weekly VWAP Plots
+plot(vwapWeekly,                title="Weekly VWAP",          color=color.rgb(255, 230, 0), offset=0, display = showWeeklyVwap ? display.pane : display.none)
+plot(weeklyUpperBandValue1,     title="Weekly Upper Band #1", color=color.green, offset=0, display = showWeeklyBand_1 ? display.pane : display.none)
+plot(weeklyLowerBandValue1,     title="Weekly Lower Band #1", color=color.green, offset=0, display = showWeeklyBand_1 ? display.pane : display.none)
+plot(weeklyUpperBandValue2,     title="Weekly Upper Band #2", color=color.olive, offset=0, display = showWeeklyBand_2 ? display.pane : display.none)
+plot(weeklyLowerBandValue2,     title="Weekly Lower Band #2", color=color.olive, offset=0, display = showWeeklyBand_2 ? display.pane : display.none)
+plot(weeklyUpperBandValue3,     title="Weekly Upper Band #3", color=color.teal, offset=0,  display = showWeeklyBand_3 ? display.pane : display.none)
+plot(weeklyLowerBandValue3,     title="Weekly Lower Band #3", color=color.teal, offset=0,  display = showWeeklyBand_3 ? display.pane : display.none)
+
+//Monthly VWAP Plots
+plot(vwapMonthly,              title="Monthly VWAP",          color=color.rgb(0, 255, 242), offset=0, display = showMonthlyVwap ? display.pane : display.none)
+plot(monthlyUpperBandValue1,   title="Monthly Upper Band #1", color=color.green, offset=0, display = showMonthlyBand_1 ? display.pane : display.none)
+plot(monthlyLowerBandValue1,   title="Monthly Lower Band #1", color=color.green, offset=0, display = showMonthlyBand_1 ? display.pane : display.none)
+plot(monthlyUpperBandValue2,   title="Monthly Upper Band #2", color=color.olive, offset=0, display = showMonthlyBand_2 ? display.pane : display.none)
+plot(monthlyLowerBandValue2,   title="Monthly Lower Band #2", color=color.olive, offset=0, display = showMonthlyBand_2 ? display.pane : display.none)
+plot(monthlyUpperBandValue3,   title="Monthly Upper Band #3", color=color.teal,  offset=0, display = showMonthlyBand_3 ? display.pane : display.none)
+plot(monthlyLowerBandValue3,   title="Monthly Lower Band #3", color=color.teal,  offset=0, display = showMonthlyBand_3 ? display.pane : display.none)
+
+//Quarterly VWAP Plots
+plot(vwapQuarterly,            title="Quarterly VWAP",          color=color.rgb(4, 0, 255), offset=0, display = showQuarterlyVwap ? display.pane : display.none)
+plot(quarterlyUpperBandValue1, title="Quarterly Upper Band #1", color=color.green, offset=0, display = showQuarterlyBand_1 ? display.pane : display.none)
+plot(quarterlyLowerBandValue1, title="Quarterly Lower Band #1", color=color.green, offset=0, display = showQuarterlyBand_1 ? display.pane : display.none)
+plot(quarterlyUpperBandValue2, title="Quarterly Upper Band #2", color=color.olive, offset=0, display = showQuarterlyBand_2 ? display.pane : display.none)
+plot(quarterlyLowerBandValue2, title="Quarterly Lower Band #2", color=color.olive, offset=0, display = showQuarterlyBand_2 ? display.pane : display.none)
+plot(quarterlyUpperBandValue3, title="Quarterly Upper Band #3", color=color.teal,  offset=0, display = showQuarterlyBand_3 ? display.pane : display.none)
+plot(quarterlyLowerBandValue3, title="Quarterly Lower Band #3", color=color.teal,  offset=0, display = showQuarterlyBand_3 ? display.pane : display.none)
+
+//Quarterly VWAP Plots
+plot(vwapYearly,               title="Yearly VWAP",          color=color.rgb(255, 0, 200), offset=0, display = showYearlyVwap ? display.pane : display.none)
+plot(yearlyUpperBandValue1,    title="Yearly Upper Band #1", color=color.green, offset=0, display = showYearlyBand_1 ? display.pane : display.none)
+plot(yearlyLowerBandValue1,    title="Yearly Lower Band #1", color=color.green, offset=0, display = showYearlyBand_1 ? display.pane : display.none)
+plot(yearlyUpperBandValue2,    title="Yearly Upper Band #2", color=color.olive, offset=0, display = showYearlyBand_2 ? display.pane : display.none)
+plot(yearlyLowerBandValue2,    title="Yearly Lower Band #2", color=color.olive, offset=0, display = showYearlyBand_2 ? display.pane : display.none)
+plot(yearlyUpperBandValue3,    title="Yearly Upper Band #3", color=color.teal,  offset=0, display = showYearlyBand_3 ? display.pane : display.none)
+plot(yearlyLowerBandValue3,    title="Yearly Lower Band #3", color=color.teal,  offset=0, display = showYearlyBand_3 ? display.pane : display.none)
+
+
+////////////////////////////////////
+//// Market Profile Period /////////
+////////////////////////////////////
+// Get seconds till 30m bar closes
+timeLeft = barstate.isrealtime ?
+     (time_close("30") - timenow) / 1000 :
+     na
+
+// Translate seconds left into minutes and seconds
+minsLeft = math.floor(timeLeft / 60)
+secsLeft = timeLeft % 60
+string secsFormat = '##'
+
+//timeframe.change(30) provides boolean when 30 min timeframe changes
+TPO_DESC              = array.new<string>(0)
+var int count         = 0
+
+//TPO periods RTH A-O
+//TPO periods globex P-x
+array.push(TPO_DESC, "A") //RTH open
+array.push(TPO_DESC, "B")
+array.push(TPO_DESC, "C")
+array.push(TPO_DESC, "D")
+array.push(TPO_DESC, "E")
+array.push(TPO_DESC, "F")
+array.push(TPO_DESC, "G")
+array.push(TPO_DESC, "H")
+array.push(TPO_DESC, "I")
+array.push(TPO_DESC, "J")
+array.push(TPO_DESC, "K")
+array.push(TPO_DESC, "L")
+array.push(TPO_DESC, "M")
+array.push(TPO_DESC, "N")
+array.push(TPO_DESC, "O")
+array.push(TPO_DESC, "R") //globex open period
+array.push(TPO_DESC, "S")
+array.push(TPO_DESC, "T")
+array.push(TPO_DESC, "U")
+array.push(TPO_DESC, "V")
+array.push(TPO_DESC, "W")
+array.push(TPO_DESC, "X")
+array.push(TPO_DESC, "a")
+array.push(TPO_DESC, "b")
+array.push(TPO_DESC, "c")
+array.push(TPO_DESC, "d")
+array.push(TPO_DESC, "e")
+array.push(TPO_DESC, "f")
+array.push(TPO_DESC, "g")
+array.push(TPO_DESC, "h")
+array.push(TPO_DESC, "i")
+array.push(TPO_DESC, "j")
+array.push(TPO_DESC, "k")
+array.push(TPO_DESC, "l")
+array.push(TPO_DESC, "m")
+array.push(TPO_DESC, "n")
+array.push(TPO_DESC, "o")
+array.push(TPO_DESC, "p")
+array.push(TPO_DESC, "q")
+array.push(TPO_DESC, "r")
+array.push(TPO_DESC, "s")
+array.push(TPO_DESC, "t")
+array.push(TPO_DESC, "u")
+array.push(TPO_DESC, "v")
+array.push(TPO_DESC, "w")
+array.push(TPO_DESC, "x")
+
+if showTPOInfo == true and timeframe.isminutes and timeframe.multiplier < 31
+    if firstBarRegSess
+        //reset counter back to 0
+        count := 0
+            
+        table.cell(breadthTable, 0, 0, "TPO Period: " + array.get(TPO_DESC, count), text_size = textSize, text_color = #000000, bgcolor = color.white)
+        
+    //create a new line when a new 30 min time period starts
+    if not firstBarRegSess and (minute == 00 or minute == 30) and count < 45
+        
+         //increment count
+        count := count + 1
+        
+        table.cell(breadthTable, 0, 0, "TPO Period: " + array.get(TPO_DESC, count), text_size = textSize, text_color = #000000, bgcolor = color.white)
+        
+    table.cell(breadthTable, 0, 1, "Time Left: " + str.tostring(minsLeft) + ":" + str.tostring(secsLeft, secsFormat), text_size = textSize, text_color = #000000, bgcolor = color.white)
