@@ -5,7 +5,7 @@
 //  /_____/ ___  /  \____//_/    _\__, / \__,_/ /_/ /_/ /_/ 
 //          /___/                /____/                     
 
-//@version=0
+//@version=1
 
 indicator("Key Previous and Pre-Market Daily Levels", shorttitle="Key Levels", overlay=true, max_lines_count=500, max_labels_count=500))
 
