@@ -99,13 +99,13 @@ showDailyLevels = input.bool(true, title='Show Daily Levels',  group=dailyGroup)
 //Today's Open (6:30 AM open on stocks, globex on futures), RTH Open (when using futures)
 openColor       = input.color(title='', defval=color.white,  group=dailyGroup, inline='1')
 showTodayOpen   = input.bool(true, title='Today Open    ',      group=dailyGroup, inline='1')
-rthOpenColor    = input.color(title='', defval=color.orange, group=dailyGroup, inline='1')
+rthOpenColor    = input.color(title='', defval=color.white, group=dailyGroup, inline='1')
 showRthOpen     = input.bool(true, title='RTH Open',           group=dailyGroup, inline='1')
 
 //Previous Day High/Low
-prevHighColor   = input.color(title='', defval=color.green,  group=dailyGroup, inline='2')
+prevHighColor   = input.color(title='', defval=color.purple,  group=dailyGroup, inline='2')
 showPrevHigh    = input.bool(true, title='Previous Day High',  group=dailyGroup, inline='2')
-prevLowColor    = input.color(title='', defval=color.green,  group=dailyGroup, inline='2')
+prevLowColor    = input.color(title='', defval=color.purple,  group=dailyGroup, inline='2')
 showPrevLow     = input.bool(true, title='Previous Day Low',   group=dailyGroup, inline='2')
 
 //Previous Day 50% and Previous Day Close
@@ -116,14 +116,14 @@ showPrevClose   = input.bool(true, title='Previous Close',     group=dailyGroup,
 
 //T2 High/Low
 t2HighColor     = input.color(title='', defval=color.red,    group=dailyGroup, inline='4')
-showT2High      = input.bool(true, title='T+2 High    ',       group=dailyGroup, inline='4')
+showT2High      = input.bool(true, title='T-2 High    ',       group=dailyGroup, inline='4')
 t2LowColor      = input.color(title='', defval=color.red,    group=dailyGroup, inline='4')
-showT2Low       = input.bool(true, title='T+2 Low',            group=dailyGroup, inline='4')
+showT2Low       = input.bool(true, title='T-2 Low',            group=dailyGroup, inline='4')
 
 //Overnight High/Low
-onHighColor     = input.color(title='', defval=color.purple, group=dailyGroup, inline='5')
+onHighColor     = input.color(title='', defval=color.orange, group=dailyGroup, inline='5')
 showOnHigh      = input.bool(true, title='Overnight High  ',   group=dailyGroup, inline='5')
-onLowColor      = input.color(title='', defval=color.purple, group=dailyGroup, inline='5')
+onLowColor      = input.color(title='', defval=color.orange, group=dailyGroup, inline='5')
 showOnLow       = input.bool(true, title='Overnight Low',      group=dailyGroup, inline='5')
 
 /Daily Settings
