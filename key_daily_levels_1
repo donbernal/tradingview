@@ -341,11 +341,6 @@ if syminfo.type == "futures"
 
 //if we are on the first bar of the regular session, plot the daily levels collected above
 if firstBarRegSess and timeframe.isintraday and showDailyLevels
-    
-    //request the RTH open for both futures
-    rthOpen = open
-    if syminfo.type == "futures" and showRthOpen == true
-        array.push(dailyLevels, rthOpen)
         
     //Delete the labels from the previous day then clear the array
     if array.size(LABELS_DAILY) > 0
