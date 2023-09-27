@@ -1,0 +1,495 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © mcthatsme
+//@version=5
+
+indicator('ConstanteGaines Daily Levels Suite + Premarket High/Low', shorttitle="Key Daily Levels",overlay=true, max_lines_count=500, max_labels_count=500)
+
+////////////////////////////////////////////////////
+/////////////////// Function Section ///////////////
+////////////////////////////////////////////////////
+// SessionHigh() returns the highest price during the specified 
+// session, optionally corrected for the given time zone.
+// Returns 'na' when the session hasn't started or isn't on the chart.
+SessionHigh(sessionTime, sessionTimeZone=syminfo.timezone) =>
+    insideSession = not na(time(timeframe.period, sessionTime, sessionTimeZone)) 
+    //newDay needed when only using RTH to dsitinguish between new day
+    newDay = dayofweek != dayofweek[1]
+    var float sessionHighPrice = na
+
+    if insideSession and (not insideSession[1] or newDay)
+        sessionHighPrice := high
+    else if insideSession
+        sessionHighPrice := math.max(sessionHighPrice, high)
+        
+    sessionHighPrice
+
+// SessionLow() returns the lowest price during the given session,
+// optionally corrected for the specified time zone.
+// Returns 'na' when the session hasn't started or isn't on the chart.
+SessionLow(sessionTime, sessionTimeZone=syminfo.timezone) =>
+    insideSession = not na(time(timeframe.period, sessionTime, sessionTimeZone))
+    //newDay needed when only using RTH to dsitinguish between new day
+    newDay = dayofweek != dayofweek[1]
+    var float sessionLowPrice = na
+
+    if insideSession and (not insideSession[1] or newDay)
+        sessionLowPrice := low
+    else if insideSession
+        sessionLowPrice := math.min(sessionLowPrice, low)
+    
+    sessionLowPrice
+
+// MonthName() returns the lowest price during the given session,
+// optionally corrected for the specified time zone.
+// Returns 'na' when the session hasn't started or isn't on the chart.
+MonthName(monthInput, sessionTimeZone=syminfo.timezone) =>
+    string monthName = switch monthInput
+        1 => "Jan"
+        2 => "Feb"
+        3 => "Mar"
+        4 => "Apr"
+        5 => "May"
+        6 => "Jun"
+        7 => "Jul"
+        8 => "Aug"
+        9 => "Sep"
+        10 => "Oct"
+        11 => "Nov"
+        12 => "Dec"
+
+    monthName
+///////////////////////////////////////////////////////
+//////////   End Functions Section    /////////////////
+///////////////////////////////////////////////////////
+
+//variable declarations
+//session times variables
+//Stocks/Crypto
+//PreMarket Trading Hours (4:00 AM - 9:29 AM)
+pmSess     = "0000-0930"
+
+//Regular trading hours (9:30 AM EST - 3:59PM EST)
+//Futures regular session (9:30 AM EST - 4:59PM EST)
+regSess    = "0930-1559"
+futRegSess = "0930-1659"
+inRegSess  = not na(time(timeframe.period, regSess, "America/New_York"))
+firstBarRegSess = session.isfirstbar_regular
+
+//Post Market Trading (4:00 PM EST - 8:00PM EST)
+postSess   = "1600-2359"
+//Futures
+//Regular trading hours (9:30 AM EST - 5:00PM)
+//Globex Trading Hours (6:00 PM - 9:29 AM)
+inMornGlobex = not na(time(timeframe.period, "0000-0929"))
+inEveGlobex  = not na(time(timeframe.period, "1800-2359"))
+
+//Booleans for if it is a new day, week, month
+newDay = dayofweek != dayofweek[1]
+newWeek = dayofweek[1] > dayofweek ? 1 : 0
+newMonth = dayofmonth[1] > dayofmonth
+
+//Groups
+var dailyGroup = "Daily Levels"
+var weeklyGroup = "Weekly Levels"
+var monthlyGroup = "Monthly Levels"
+
+//Input for level colors
+showDailyLevels = input.bool(true, title='Show Daily Levels',  group=dailyGroup)
+
+//Previous Day High/Low
+prevHighColor   = input.color(title='', defval=color.green,  group=dailyGroup, inline='2')
+showPrevHigh    = input.bool(true, title='Previous Day High',  group=dailyGroup, inline='2')
+prevLowColor    = input.color(title='', defval=color.green,  group=dailyGroup, inline='2')
+showPrevLow     = input.bool(true, title='Previous Day Low',   group=dailyGroup, inline='2')
+
+//Previous Day Close
+prevCloseColor  = input.color(title='', defval=color.aqua,   group=dailyGroup, inline='3')
+showPrevClose   = input.bool(true, title='Previous Close',     group=dailyGroup, inline='3')
+
+//T2 High/Low
+t2HighColor     = input.color(title='', defval=color.red,    group=dailyGroup, inline='4')
+showT2High      = input.bool(true, title='T-2 High    ',       group=dailyGroup, inline='4')
+t2LowColor      = input.color(title='', defval=color.red,    group=dailyGroup, inline='4')
+showT2Low       = input.bool(true, title='T-2 Low',            group=dailyGroup, inline='4')
+
+//Overnight High/Low
+onHighColor     = input.color(title='', defval=color.purple, group=dailyGroup, inline='5')
+showOnHigh      = input.bool(true, title='Overnight High  ',   group=dailyGroup, inline='5')
+onLowColor      = input.color(title='', defval=color.purple, group=dailyGroup, inline='5')
+showOnLow       = input.bool(true, title='Overnight Low',      group=dailyGroup, inline='5')
+
+//Daily Settings
+numDailyPeriods   = input.int(title='Number of Previous Days', defval=0, group = dailyGroup)
+extendOptionDaily = input.string(title='Extend Daily Lines', options=["Right","Both", "None"], defval="Right", group = dailyGroup)
+extendLineDaily   = (extendOptionDaily == 'Right') ? extend.right :
+                     (extendOptionDaily == 'Both') ? extend.both :
+                     extend.none
+linewidthDaily    = input.int(1, "Daily Line Thickness", group = dailyGroup)
+styleOptionDaily  = input.string(title='Daily Line Style', options=["solid (─)", "dashed (╌)", "dotted (┈)"], defval="solid (─)", group = dailyGroup)
+lineStyleDaily    = (styleOptionDaily == "dotted (┈)") ? line.style_dotted : 
+                   (styleOptionDaily == "dashed (╌)") ? line.style_dashed :
+                   line.style_solid
+labelColorDaily   = input.color(title='', defval=color.white, group = dailyGroup, inline='labelDaily')
+showDailyLabels   = input.bool(title='Show Daily Level Labels', defval=true, group = dailyGroup, inline='labelDaily')
+
+labeloffsetDaily  = input.int(title='Daily Label Offset', defval=10, group = dailyGroup)
+
+///////////////////////////
+//  Weekly Levels Inputs //
+///////////////////////////
+showWeeklyLevels    = input.bool(true, title='Show Weekly Levels',  group=weeklyGroup)
+wkLowColor          = input.color(title='', defval=color.red,    group=weeklyGroup, inline='6')
+showPrevWeeklyLow   = input.bool(true, title='Previous Weekly Low',   group=weeklyGroup, inline='6')
+wkHalfColor         = input.color(title='', defval=color.yellow, group=weeklyGroup, inline='7')
+showPrevWeeklyHalf  = input.bool(true, title='Previous Weekly 50%',   group=weeklyGroup, inline='7')
+wkHighColor         = input.color(title='', defval=color.red,    group=weeklyGroup, inline='8')
+showPrevWeeklyHigh  = input.bool(true, title='Previous Weekly High',  group=weeklyGroup, inline='8')
+
+//Weekly Settings
+numWklyPeriods     = input.int(title='Number of Previous Weeks', defval=0, group = weeklyGroup)
+extendOptionWeekly = input.string(title='Extend Weekly Lines', options=["Right","Both", "None"], defval="Right", group = weeklyGroup)
+extendLineWeekly   = (extendOptionWeekly == 'Right') ? extend.right :
+                     (extendOptionWeekly == 'Both') ? extend.both :
+                     extend.none
+linewidthWeekly    = input.int(1, "Weekly Line Thickness", group = weeklyGroup)
+styleOptionWeekly  = input.string(title='Weekly Line Style', options=["solid (─)", "dashed (╌)", "dotted (┈)"], defval="dotted (┈)", group = weeklyGroup)
+lineStyleWeekly    = (styleOptionWeekly == "dotted (┈)") ? line.style_dotted : 
+                     (styleOptionWeekly == "dashed (╌)") ? line.style_dashed :
+                     line.style_solid
+labelColorWeekly   = input.color(title='', defval=color.white, group = weeklyGroup, inline='labelWeekly')
+showWeeklyLabels   = input.bool(title='Weekly Show Weekly Level Labels', defval=true, group = weeklyGroup, inline='labelWeekly')
+labeloffsetWeekly  = input.int(title='Weekly Label Offset', defval=10, group = weeklyGroup)
+
+////////////////////////////
+//  Monthly Levels Inputs //
+////////////////////////////
+showMonthlyLevels  = input.bool(title='Show Monthly Levels', defval=true, group = monthlyGroup)
+monLowColor         = input.color(title='', defval=color.orange, group=monthlyGroup, inline='9')
+showPrevMonthlyLow  = input.bool(true, title='Previous Monthly Low',  group=monthlyGroup, inline='9')
+monHalfColor        = input.color(title='', defval=color.yellow, group=monthlyGroup, inline='10')
+showPrevMonthlyHalf = input.bool(true, title='Previous Monthly 50%',  group=monthlyGroup, inline='10')
+monHighColor        = input.color(title='', defval=color.orange, group=monthlyGroup, inline='11')
+showPrevMonthlyHigh = input.bool(true, title='Previous Monthly High', group=monthlyGroup, inline='11')
+
+//Monthly Settings
+numMonPeriods       = input.int(title='Number of Previous Months', defval=0, group = monthlyGroup)
+extendOptionMonthly = input.string(title='Extend Monthly Lines', options=["Right","Both", "None"], defval="Right", group = monthlyGroup)
+extendLineMonthly   = (extendOptionMonthly == 'Right') ? extend.right :
+                     (extendOptionMonthly == 'Both') ? extend.both :
+                     extend.none
+linewidthMonthly    = input.int(1, "Line Thickness", group = monthlyGroup)
+styleOptionMonthly  = input.string(title='Line Style', options=["solid (─)", "dashed (╌)", "dotted (┈)"], defval="dashed (╌)", group = monthlyGroup)
+lineStyleMonthly    = (styleOptionMonthly == "dotted (┈)") ? line.style_dotted : 
+                      (styleOptionMonthly == "dashed (╌)") ? line.style_dashed :
+                      line.style_solid
+labelColorMonthly   = input.color(title='', defval=color.white, group = monthlyGroup, inline='labelMonthly')
+showMonthlyLabels   = input.bool(title='Show Monthly Level Labels', defval=true, group = monthlyGroup, inline='labelMonthly')
+labeloffsetMonthly  = input.int(title='Monthly Label Offset', defval=10, group = monthlyGroup)
+
+//Array Initialization
+arrCountDaily                = 0
+arrCountWeekly               = 0
+arrCountMonthly              = 0
+LABEL_DESC                   = array.new<string>(0)
+LINE_COLOR                   = array.new_color(0)
+dailyLevels                  = array.new<float>(0)
+weeklyLevels                 = array.new<float>(0)
+monthlyLevels                = array.new<float>(0)
+var line[] LINES_DAILY       = array.new_line(0)
+var label[] LABELS_DAILY     = array.new_label(0)
+var line[] LINES_WEEKLY      = array.new_line(0)
+LABEL_DESC_WEEKLY            = array.new<string>(0)
+var label[] LABELS_WEEKLY    = array.new_label(0)
+var line[] LINES_MONTHLY     = array.new_line(0)
+LABEL_DESC_MONTHLY           = array.new<string>(0)
+var label[] LABELS_MONTHLY   = array.new_label(0)
+
+//Daily Levels
+prevHigh    = SessionHigh(regSess, "America/New_York")[1]
+prevLow     = SessionLow(regSess, "America/New_York")[1]
+prevMid     = (prevHigh + prevLow) / 2
+t2High      = request.security(syminfo.tickerid, "D", high[2], lookahead=barmerge.lookahead_on)
+t2Low       = request.security(syminfo.tickerid, "D", low[2], lookahead=barmerge.lookahead_on)
+
+//Weekly Levels
+[prevWkHigh, currWkHigh, prevWkLow, currWkLow, prevWkTime, currWkTime]  = request.security(syminfo.tickerid, "W", [high[1], high, low[1], low, time[1], time], lookahead=barmerge.lookahead_on)
+prevWkMid   = (prevWkHigh + prevWkLow) / 2
+currWkMid   = (currWkHigh + currWkLow) / 2
+
+//New month starts at beginning of premarket while weekly values from request security do not update until the start of the regular session
+//Fixes this mismatch of data being behind when ETH is enabled.
+if syminfo.session == session.extended and newWeek
+    prevWkHigh := currWkHigh
+    prevWkLow  := currWkLow
+    prevWkMid  := currWkMid
+    prevWkTime := currWkTime
+
+//Monthly Levels
+[prevMonHigh, currMonHigh, prevMonLow, currMonLow, prevMonTime] = request.security(syminfo.tickerid, "M", [high[1], high, low[1], low, time[1]], lookahead=barmerge.lookahead_on)
+prevMonMid  = (prevMonHigh + prevMonLow) / 2
+currMonMid  = (currMonHigh + currMonLow) / 2
+prevMonVal  = month(prevMonTime)
+
+//Recalculate when it is a futures ticker due to new monthly candle starting during Globex which is the evening before the actual start of a new month. 
+//Fixes the name mismatch that happens because of this. Shifts the month to reflect the correct month.
+if syminfo.type == "futures" and newMonth and not inRegSess
+    if prevMonVal == 12
+        prevMonVal := 1
+    else 
+        prevMonVal := prevMonVal + 1
+
+//New month starts at beginning of premarket while weekly values from request security do not update until the start of the regular session
+//Fixes this mismatch of data being behind when ETH is enabled.
+if syminfo.session == session.extended and newMonth
+    prevMonHigh := currMonHigh
+    prevMonLow  := currMonLow
+    prevMonMid  := currMonMid
+    prevMonVal := month(time[1])
+
+//Overnight Levels
+pmHigh      = request.security(ticker.modify(syminfo.tickerid, session.extended), "30", SessionHigh(pmSess, "America/New_York"), lookahead=barmerge.lookahead_on)
+pmLow       = request.security(ticker.modify(syminfo.tickerid, session.extended), "30", SessionLow(pmSess, "America/New_York"), lookahead=barmerge.lookahead_on)
+ahHigh      = request.security(ticker.modify(syminfo.tickerid, session.extended), "30", SessionHigh(postSess, "America/New_York"), lookahead=barmerge.lookahead_on)
+ahLow       = request.security(ticker.modify(syminfo.tickerid, session.extended), "30", SessionLow(postSess, "America/New_York"), lookahead=barmerge.lookahead_on)
+onHigh      = (pmHigh > ahHigh) ? pmHigh : ahHigh
+onLow       = (pmLow < ahLow) ? pmLow : ahLow
+
+//Pushing values collected above into a label description, line color, and level values
+if showDailyLevels == true    
+    if showPrevHigh == true
+        array.push(LABEL_DESC, 'Prev Day High:')
+        array.push(LINE_COLOR, prevHighColor)
+        array.push(dailyLevels, prevHigh)
+        arrCountDaily += 1
+
+    if showPrevClose == true
+        array.push(LABEL_DESC, 'Prev Day Close:')
+        array.push(LINE_COLOR, prevCloseColor)
+        array.push(dailyLevels, prevClose)
+        arrCountDaily += 1
+
+    //T+2 Settlement High/Low (settlement levels)
+    if showT2High == true
+        array.push(LABEL_DESC, 'T-2 High:')
+        array.push(LINE_COLOR, t2HighColor)
+        array.push(dailyLevels, t2High)
+        arrCountDaily += 1
+        
+    if showT2Low == true
+        array.push(LABEL_DESC, 'T-2 Low:')
+        array.push(LINE_COLOR, t2LowColor)
+        array.push(dailyLevels, t2Low)
+        arrCountDaily += 1
+
+    //Overnight Levels
+    if showOnHigh == true
+        array.push(LABEL_DESC, 'Overnight High:')
+        array.push(LINE_COLOR, onHighColor)
+        array.push(dailyLevels, onHigh)
+        arrCountDaily += 1
+    if showOnLow == true
+        array.push(LABEL_DESC, 'Overnight Low:')
+        array.push(LINE_COLOR, onLowColor)
+        array.push(dailyLevels, onLow)
+        arrCountDaily += 1
+
+    if showRthOpen == true and syminfo.type == "futures"
+        array.push(LABEL_DESC, 'RTH Open:')
+        array.push(LINE_COLOR, rthOpenColor)
+        arrCountDaily += 1
+
+//Longer Term Levels
+//Weekly Levels
+if showWeeklyLevels == true
+    if showPrevWeeklyHigh == true
+        array.push(LABEL_DESC_WEEKLY, "Week of " + MonthName(month(prevWkTime)) + " " + str.tostring(dayofmonth(prevWkTime)) + " High: ")
+        array.push(LINE_COLOR, wkHighColor)
+        array.push(weeklyLevels, prevWkHigh)
+        arrCountWeekly += 1
+
+    if showPrevWeeklyLow == true
+        array.push(LABEL_DESC_WEEKLY, "Week of " + MonthName(month(prevWkTime)) + " " + str.tostring(dayofmonth(prevWkTime)) + " Low: ")
+        array.push(LINE_COLOR, wkLowColor)
+        array.push(weeklyLevels, prevWkLow)
+        arrCountWeekly += 1
+
+    if showPrevWeeklyHalf == true
+        array.push(LABEL_DESC_WEEKLY, "Week of " + MonthName(month(prevWkTime)) + " " + str.tostring(dayofmonth(prevWkTime)) + " 50%: ")
+        array.push(LINE_COLOR, wkHalfColor)
+        array.push(weeklyLevels, prevWkMid)
+        arrCountWeekly += 1
+
+//Monthly Levels
+if showMonthlyLevels == true
+    if showPrevMonthlyHigh == true
+        array.push(LABEL_DESC_MONTHLY, MonthName(prevMonVal) + ' High: ')
+        array.push(LINE_COLOR, monHighColor)
+        array.push(monthlyLevels, prevMonHigh)
+        arrCountMonthly += 1
+
+    if showPrevMonthlyLow == true
+        array.push(LABEL_DESC_MONTHLY, MonthName(prevMonVal) + ' Low: ')
+        array.push(LINE_COLOR, monLowColor)
+        array.push(monthlyLevels, prevMonLow)
+        arrCountMonthly += 1
+
+    if showPrevMonthlyHalf == true
+        array.push(LABEL_DESC_MONTHLY, MonthName(prevMonVal) + ' 50%: ')
+        array.push(LINE_COLOR, monHalfColor)
+        array.push(monthlyLevels, prevMonMid)
+        arrCountMonthly += 1
+
+//determine if we are in futures change conditional due to different regular sessions open time
+//Futures Trading Starts vs. normal stocks
+if syminfo.type == "futures" 
+    firstBarRegSess := not inRegSess[1] and inRegSess
+
+//if we are on the first bar of the regular session, plot the daily levels collected above
+if firstBarRegSess and timeframe.isintraday and showDailyLevels
+    
+    //request the RTH open for both futures
+    rthOpen = open
+    if syminfo.type == "futures" and showRthOpen == true
+        array.push(dailyLevels, rthOpen)
+        
+    //Delete the labels from the previous day then clear the array
+    if array.size(LABELS_DAILY) > 0
+        for i=0 to array.size(LABELS_DAILY) - 1
+            label.delete(array.get(LABELS_DAILY, i))
+            
+        array.clear(LABELS_DAILY)
+     
+    if array.size(LINES_DAILY) > 0
+    
+        sizeArr = array.size(LINES_DAILY) - 1
+
+        for i = sizeArr to 0
+            //show number of lines based on user input, else just delete all lines
+            if i > sizeArr - (numDailyPeriods * arrCountDaily)
+                line.set_extend(array.get(LINES_DAILY,i), extendLineDaily)
+            else
+                line.delete(array.get(LINES_DAILY, i))
+                array.remove(LINES_DAILY, i)
+    
+    //create a new lines from DAILY_LEVELS prices
+    for i = 0 to (array.size(dailyLevels) - 1)
+        
+        if extendOptionDaily == 'Right' or extendOptionDaily == 'Both'
+            array.push(LINES_DAILY, line.new(bar_index, array.get(dailyLevels,i), bar_index, array.get(dailyLevels,i), color=array.get(LINE_COLOR,i), style=lineStyleDaily,width=linewidthDaily,extend=extendLineDaily))
+        else
+            array.push(LINES_DAILY, line.new(bar_index, array.get(dailyLevels,i), bar_index, array.get(dailyLevels,i), color=array.get(LINE_COLOR,i), style=lineStyleDaily,width=linewidthDaily))
+        
+        if showDailyLabels == true
+            array.push(LABELS_DAILY, label.new(bar_index + labeloffsetDaily, array.get(dailyLevels,i), array.get(LABEL_DESC,i) + str.tostring(array.get(dailyLevels,i), '#.00'), style=label.style_none))
+            label.set_textcolor(array.get(LABELS_DAILY,i), labelColorDaily)
+
+//extends line as more bars are printed on screen
+if array.size(LINES_DAILY) != 0
+    for i = 0 to (array.size(LINES_DAILY) - 1)
+        line.set_x2(array.get(LINES_DAILY,i), bar_index)
+        
+    if showDailyLabels == true
+        for i = 0 to arrCountDaily - 1
+            label.set_x(array.get(LABELS_DAILY,i), bar_index + labeloffsetDaily)
+
+///////////////////////////////
+//// Plotting Weekly Lines ////
+///////////////////////////////
+//if we are on a new week plot the weekly levels collected above
+if newWeek and showWeeklyLevels
+    //Delete the labels based on user input, otherwise delete all labels
+    if array.size(LABELS_WEEKLY) > 0
+        
+        sizeArr = array.size(LABELS_WEEKLY) - 1
+
+        for i = sizeArr to 0
+            if i <= sizeArr - (numWklyPeriods * arrCountWeekly)
+                label.delete(array.get(LABELS_WEEKLY, i))
+                array.remove(LABELS_WEEKLY, i)
+
+    if array.size(LINES_WEEKLY) > 0
+
+        sizeArr = array.size(LINES_WEEKLY) - 1 
+
+        for i = sizeArr to 0
+            //show number of lines based on user input, else just delete all lines
+            if i > sizeArr - (numWklyPeriods * arrCountWeekly)
+                line.set_extend(array.get(LINES_WEEKLY,i), extendLineWeekly)
+            else
+                line.delete(array.get(LINES_WEEKLY, i))
+                array.remove(LINES_WEEKLY, i)
+                
+    //create a new line from WEEKLY_LEVELS prices
+    for i = 0 to (array.size(weeklyLevels) - 1)
+        
+        if extendOptionWeekly == 'Right' or extendOptionWeekly == 'Both'
+            array.push(LINES_WEEKLY, line.new(prevWkTime, array.get(weeklyLevels,i), time, array.get(weeklyLevels,i), xloc.bar_time, color=array.get(LINE_COLOR, i + arrCountDaily), style=lineStyleWeekly,width=linewidthWeekly,extend=extendLineWeekly))
+        else
+            array.push(LINES_WEEKLY, line.new(prevWkTime, array.get(weeklyLevels,i), time, array.get(weeklyLevels,i), xloc.bar_time, color=array.get(LINE_COLOR, i + arrCountDaily), style=lineStyleWeekly,width=linewidthWeekly))
+        
+        if showWeeklyLabels == true
+            array.push(LABELS_WEEKLY, label.new(bar_index + labeloffsetWeekly, array.get(weeklyLevels,i), array.get(LABEL_DESC_WEEKLY, i) + str.tostring(array.get(weeklyLevels,i), '#.00'), style=label.style_none))
+            label.set_textcolor(array.get(LABELS_WEEKLY,i), labelColorWeekly)
+
+//extend current weekly lines as more bars are printed on screen
+if array.size(LINES_WEEKLY) != 0
+    for i = 0 to array.size(LINES_WEEKLY) - 1
+        line.set_x2(array.get(LINES_WEEKLY,i), time)
+        
+    if showWeeklyLabels == true
+        for i = 0 to array.size(LABELS_WEEKLY) - 1
+            label.set_x(array.get(LABELS_WEEKLY, i), bar_index + labeloffsetWeekly)
+            label.set_textcolor(array.get(LABELS_WEEKLY, i), labelColorWeekly)
+
+///////////////////////////////
+//// Plotting Monthly Lines ////
+///////////////////////////////
+//if we are on a new week plot the monthly levels collected above
+if newMonth and showMonthlyLevels
+    //Delete the labels based on user input, otherwise delete all labels
+    if array.size(LABELS_MONTHLY) > 0
+        
+        sizeArr = array.size(LABELS_MONTHLY) - 1
+
+        for i = sizeArr to 0
+            if i <= sizeArr - (numMonPeriods * arrCountMonthly)
+                label.delete(array.get(LABELS_MONTHLY, i))
+                array.remove(LABELS_MONTHLY, i)
+
+    if array.size(LINES_MONTHLY) > 0
+
+        sizeArr = array.size(LINES_MONTHLY) - 1 
+
+        for i = sizeArr to 0
+            //show number of lines based on user input, else just delete all lines
+            if i > sizeArr - (numMonPeriods * arrCountMonthly)
+                line.set_extend(array.get(LINES_MONTHLY,i), extendLineMonthly)
+            else
+                line.delete(array.get(LINES_MONTHLY, i))
+                array.remove(LINES_MONTHLY, i)
+                
+    //create a new line from MONTHLY_LEVELS prices
+    for i = 0 to (array.size(monthlyLevels) - 1)
+        
+        if extendOptionMonthly == 'Right' or extendOptionMonthly == 'Both'
+            array.push(LINES_MONTHLY, line.new(prevMonTime, array.get(monthlyLevels,i), time, array.get(monthlyLevels,i), xloc.bar_time, color=array.get(LINE_COLOR, i + arrCountDaily + arrCountWeekly), style=lineStyleMonthly,width=linewidthMonthly,extend=extendLineMonthly))
+        else
+            array.push(LINES_MONTHLY, line.new(prevMonTime, array.get(monthlyLevels,i), time, array.get(monthlyLevels,i), xloc.bar_time, color=array.get(LINE_COLOR, i + arrCountDaily + arrCountWeekly), style=lineStyleMonthly,width=linewidthMonthly))
+        
+        if showMonthlyLabels == true
+            array.push(LABELS_MONTHLY, label.new(bar_index + labeloffsetMonthly, array.get(monthlyLevels,i), array.get(LABEL_DESC_MONTHLY, i) + str.tostring(array.get(monthlyLevels,i), '#.00'), style=label.style_none))
+            label.set_textcolor(array.get(LABELS_MONTHLY,i), labelColorMonthly)    
+
+
+//extend current monthly lines as more bars are printed on screen
+if array.size(LINES_MONTHLY) != 0
+    for i = 0 to array.size(LINES_MONTHLY) - 1
+        line.set_x2(array.get(LINES_MONTHLY,i), time)
+        
+    if showMonthlyLabels == true
+        for i = 0 to array.size(LABELS_MONTHLY) - 1
+            label.set_x(array.get(LABELS_MONTHLY, i), bar_index + labeloffsetMonthly)
+            label.set_textcolor(array.get(LABELS_MONTHLY, i), labelColorMonthly)
+
+
+
