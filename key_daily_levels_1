@@ -95,6 +95,11 @@ var monthlyGroup = "Monthly Levels"
 
 //Input for level colors
 showDailyLevels = input.bool(true, title='Show Daily Levels',  group=dailyGroup)
+//Today's Open (9:30 AM open on stocks, globex on futures), RTH Open (when using futures)
+openColor       = input.color(title='', defval=color.white,  group=dailyGroup, inline='1')
+showTodayOpen   = input.bool(true, title='Today Open    ',      group=dailyGroup, inline='1')
+rthOpenColor    = input.color(title='', defval=color.orange, group=dailyGroup, inline='1')
+showRthOpen     = input.bool(true, title='RTH Open',           group=dailyGroup, inline='1')
 
 //Previous Day High/Low
 prevHighColor   = input.color(title='', defval=color.green,  group=dailyGroup, inline='2')
@@ -205,9 +210,11 @@ LABEL_DESC_MONTHLY           = array.new<string>(0)
 var label[] LABELS_MONTHLY   = array.new_label(0)
 
 //Daily Levels
+todayOpen   = request.security(syminfo.tickerid, "D", open, lookahead=barmerge.lookahead_on)
 prevHigh    = SessionHigh(regSess, "America/New_York")[1]
 prevLow     = SessionLow(regSess, "America/New_York")[1]
 prevMid     = (prevHigh + prevLow) / 2
+prevClose   = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on)
 t2High      = request.security(syminfo.tickerid, "D", high[2], lookahead=barmerge.lookahead_on)
 t2Low       = request.security(syminfo.tickerid, "D", low[2], lookahead=barmerge.lookahead_on)
 
@@ -256,6 +263,15 @@ onLow       = (pmLow < ahLow) ? pmLow : ahLow
 
 //Pushing values collected above into a label description, line color, and level values
 if showDailyLevels == true    
+    if showTodayOpen == true
+        if syminfo.type != "futures"
+            array.push(LABEL_DESC, 'Todays Open:')
+        else
+            array.push(LABEL_DESC, 'Globex Open:')
+        array.push(LINE_COLOR, openColor)
+        array.push(dailyLevels, todayOpen)
+        arrCountDaily += 1
+
     if showPrevHigh == true
         array.push(LABEL_DESC, 'Prev Day High:')
         array.push(LINE_COLOR, prevHighColor)
@@ -291,6 +307,11 @@ if showDailyLevels == true
         array.push(LABEL_DESC, 'Overnight Low:')
         array.push(LINE_COLOR, onLowColor)
         array.push(dailyLevels, onLow)
+        arrCountDaily += 1
+
+    if showRthOpen == true and syminfo.type == "futures"
+        array.push(LABEL_DESC, 'RTH Open:')
+        array.push(LINE_COLOR, rthOpenColor)
         arrCountDaily += 1
 
 //Longer Term Levels
@@ -341,6 +362,11 @@ if syminfo.type == "futures"
 
 //if we are on the first bar of the regular session, plot the daily levels collected above
 if firstBarRegSess and timeframe.isintraday and showDailyLevels
+    
+    //request the RTH open for both futures
+    rthOpen = open
+    if syminfo.type == "futures" and showRthOpen == true
+        array.push(dailyLevels, rthOpen)
         
     //Delete the labels from the previous day then clear the array
     if array.size(LABELS_DAILY) > 0
@@ -480,6 +506,7 @@ if array.size(LINES_MONTHLY) != 0
         for i = 0 to array.size(LABELS_MONTHLY) - 1
             label.set_x(array.get(LABELS_MONTHLY, i), bar_index + labeloffsetMonthly)
             label.set_textcolor(array.get(LABELS_MONTHLY, i), labelColorMonthly)
+
 
 
 
