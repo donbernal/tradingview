@@ -293,11 +293,6 @@ if showDailyLevels == true
         array.push(dailyLevels, onLow)
         arrCountDaily += 1
 
-    if showRthOpen == true and syminfo.type == "futures"
-        array.push(LABEL_DESC, 'RTH Open:')
-        array.push(LINE_COLOR, rthOpenColor)
-        arrCountDaily += 1
-
 //Longer Term Levels
 //Weekly Levels
 if showWeeklyLevels == true
