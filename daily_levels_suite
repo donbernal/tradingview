@@ -1,0 +1,1183 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © mcthatsme
+//@version=5
+
+indicator('Daily Levels Suite + Premarket High/Low', shorttitle="Daily Levels",overlay=true, max_lines_count=500, max_labels_count=500)
+
+//////////////////////////////////////////////////
+/////////           Inputs             ///////////
+//////////////////////////////////////////////////
+//Groups
+var dailyGroup = "Daily Levels"
+var weeklyGroup = "Weekly Levels"
+var monthlyGroup = "Monthly Levels"
+
+//Input for level colors
+showDailyLevels = input.bool(true, title='Show Daily Levels',  group=dailyGroup)
+//Today's Open (9:30 AM open on stocks, globex on futures), RTH Open (when using futures)
+globexOpenColor = input.color(title='', defval=color.white,  group=dailyGroup, inline='1')
+showGlobexOpen  = input.bool(true, title='Globex Open    ',      group=dailyGroup, inline='1')
+rthOpenColor    = input.color(title='', defval=color.orange, group=dailyGroup, inline='1')
+showRthOpen     = input.bool(true, title='RTH Open',           group=dailyGroup, inline='1')
+
+//Previous Day High/Low
+prevHighColor   = input.color(title='', defval=color.green,  group=dailyGroup, inline='2')
+showPrevHigh    = input.bool(true, title='Previous Day High  ',  group=dailyGroup, inline='2')
+prevLowColor    = input.color(title='', defval=color.green,  group=dailyGroup, inline='2')
+showPrevLow     = input.bool(true, title='Previous Day Low',   group=dailyGroup, inline='2')
+
+//Previous Day H/L 50% and Previous Day O/C 50% Close
+midHLColor     = input.color(title='', defval=color.yellow, group=dailyGroup, inline='3')
+showPrevMidHL  = input.bool(true, title='Prev Day 50% (HL2)',  group=dailyGroup, inline='3')
+midOCColor     = input.color(title='', defval=color.fuchsia, group=dailyGroup, inline='3')
+showPrevMidOC  = input.bool(true, title='Prev Day 50% (OC2)',  group=dailyGroup, inline='3')
+
+//T2 High/Low
+t2HighColor     = input.color(title='', defval=color.red,    group=dailyGroup, inline='4')
+showT2High      = input.bool(true, title='T+2 High      ',       group=dailyGroup, inline='4')
+t2LowColor      = input.color(title='', defval=color.red,    group=dailyGroup, inline='4')
+showT2Low       = input.bool(true, title='T+2 Low',            group=dailyGroup, inline='4')
+
+//Overnight High/Low
+onHighColor     = input.color(title='', defval=color.purple, group=dailyGroup, inline='5')
+showOnHigh      = input.bool(true, title='Overnight High  ',   group=dailyGroup, inline='5')
+onLowColor      = input.color(title='', defval=color.purple, group=dailyGroup, inline='5')
+showOnLow       = input.bool(true, title='Overnight Low',      group=dailyGroup, inline='5')
+
+//Previous Close
+prevCloseColor = input.color(title='', defval=color.aqua,   group=dailyGroup, inline='6')
+showPrevClose  = input.bool(true, title='Previous Close',     group=dailyGroup, inline='6')
+//Daily Settings
+numDailyPeriods   = input.int(title='Number of Previous Days', defval=1, group = dailyGroup, minval = 1, maxval = 40)
+extendOptionDaily = input.string(title='Extend Daily Lines', options=["Right","Both", "None"], defval="Right", group = dailyGroup)
+extendLineDaily   = (extendOptionDaily == 'Right') ? extend.right :
+                     (extendOptionDaily == 'Both') ? extend.both :
+                     extend.none
+linewidthDaily    = input.int(1, "Daily Line Thickness", group = dailyGroup)
+styleOptionDaily  = input.string(title='Daily Line Style', options=["solid (─)", "dashed (╌)", "dotted (┈)"], defval="solid (─)", group = dailyGroup)
+lineStyleDaily    = (styleOptionDaily == "dotted (┈)") ? line.style_dotted : 
+                   (styleOptionDaily == "dashed (╌)") ? line.style_dashed :
+                   line.style_solid
+labelColorDaily       = input.color(title='', defval=color.white, group = dailyGroup, inline='labelDaily')
+showDailyLabels       = input.bool(title='Show Daily Level Labels', defval=true, group = dailyGroup, inline='labelDaily')
+labelDailyTextOption  = input.string(title="Daily Label Text Size", options=[ "Tiny", "Small", "Normal",  "Large", "Huge"], defval="Normal", group=dailyGroup)
+labelDailyTextSize    = switch labelDailyTextOption
+    'Tiny' => size.tiny
+    'Small' => size.small
+    'Normal' => size.normal
+    'Large' => size.large
+    'Huge' => size.huge
+labeloffsetDaily  = input.int(title='Daily Label Offset', defval=20, group = dailyGroup)
+
+///////////////////////////
+//  Weekly Levels Inputs //
+///////////////////////////
+showWeeklyLevels   = input.bool(true, title='Show Weekly Levels',  group=weeklyGroup)
+wkHighColor        = input.color(title='', defval=color.lime,    group=weeklyGroup, inline='6')
+showPrevWeekHigh   = input.bool(true, title='Previous Week High ',  group=weeklyGroup, inline='6')
+wkLowColor         = input.color(title='', defval=color.lime,    group=weeklyGroup, inline='6')
+showPrevWeekLow    = input.bool(true, title='Previous Week Low',   group=weeklyGroup, inline='6')
+
+wkHalfHLColor      = input.color(title='', defval=color.yellow, group=weeklyGroup, inline='7')
+showPrevWeekHalfHL = input.bool(true, title='Prev Week 50% (HL2)',   group=weeklyGroup, inline='7')
+wkHalfOCColor      = input.color(title='', defval=color.fuchsia, group=weeklyGroup, inline='7')
+showPrevWeekHalfOC = input.bool(true, title='Prev Week 50% (OC2)',   group=weeklyGroup, inline='7')
+
+wkOpenColor        = input.color(title='', defval=color.orange, group=weeklyGroup, inline='8')
+showRthWeekOpen    = input.bool(true, title='Current Week Open   ',   group=weeklyGroup, inline='8')
+wkCloseColor       = input.color(title='', defval=color.aqua,    group=weeklyGroup, inline='8')
+showPrevWeekClose  = input.bool(true, title='Previous Week Close',  group=weeklyGroup, inline='8')
+
+//Weekly Settings
+numWklyPeriods     = input.int(title='Number of Previous Weeks', defval=1, group = weeklyGroup, minval = 1, maxval = 20)
+extendOptionWeekly = input.string(title='Extend Weekly Lines', options=["Right","Both", "None"], defval="Right", group = weeklyGroup)
+extendLineWeekly   = (extendOptionWeekly == 'Right') ? extend.right :
+                     (extendOptionWeekly == 'Both') ? extend.both :
+                     extend.none
+linewidthWeekly    = input.int(1, "Weekly Line Thickness", group = weeklyGroup)
+styleOptionWeekly  = input.string(title='Weekly Line Style', options=["solid (─)", "dashed (╌)", "dotted (┈)"], defval="dotted (┈)", group = weeklyGroup)
+lineStyleWeekly    = (styleOptionWeekly == "dotted (┈)") ? line.style_dotted : 
+                     (styleOptionWeekly == "dashed (╌)") ? line.style_dashed :
+                     line.style_solid
+labelColorWeekly   = input.color(title='', defval=color.white, group = weeklyGroup, inline='labelWeekly')
+showWeeklyLabels   = input.bool(title='Weekly Show Weekly Level Labels', defval=true, group = weeklyGroup, inline='labelWeekly')
+labelWklyTextOption  = input.string(title="Weekly Label Text Size", options=[ "Tiny", "Small", "Normal",  "Large", "Huge"], defval="Normal", group=weeklyGroup)
+labelWklyTextSize    = switch labelWklyTextOption
+    'Tiny' => size.tiny
+    'Small' => size.small
+    'Normal' => size.normal
+    'Large' => size.large
+    'Huge' => size.huge
+labeloffsetWeekly  = input.int(title='Weekly Label Offset', defval=10, group = weeklyGroup)
+
+////////////////////////////
+//  Monthly Levels Inputs //
+////////////////////////////
+showMonthlyLevels   = input.bool(title='Show Monthly Levels', defval=true, group = monthlyGroup)
+monHighColor        = input.color(title='', defval=color.rgb(1, 219, 147), group=monthlyGroup, inline='9')
+showPrevMonthHigh   = input.bool(true, title='Previous Monthly High ', group=monthlyGroup, inline='9')
+monLowColor         = input.color(title='', defval=color.rgb(1, 219, 147), group=monthlyGroup, inline='9')
+showPrevMonthLow    = input.bool(true, title='Previous Monthly Low',  group=monthlyGroup, inline='9')
+monHalfColorHL      = input.color(title='', defval=color.rgb(255, 230, 1), group=monthlyGroup, inline='10')
+showPrevMonthHalfHL = input.bool(true, title='Prev Monthly 50% (HL2)',  group=monthlyGroup, inline='10')
+monHalfOCColor      = input.color(title='', defval=color.fuchsia, group=monthlyGroup, inline='10')
+showPrevMonthHalfOC = input.bool(true, title='Previous Month 50% (OC2)',   group=monthlyGroup, inline='10')
+
+monOpenColor        = input.color(title='', defval=color.orange, group=monthlyGroup, inline='11')
+showRthMonthOpen    = input.bool(true, title='Current Month Open    ',   group=monthlyGroup, inline='11')
+monCloseColor       = input.color(title='', defval=color.aqua,    group=monthlyGroup, inline='11')
+showPrevMonthClose  = input.bool(true, title='Previous Month Close',  group=monthlyGroup, inline='11')
+
+//Monthly Settings
+numMonPeriods       = input.int(title='Number of Previous Months', defval=1, group = monthlyGroup, minval = 1, maxval = 12)
+extendOptionMonthly = input.string(title='Extend Monthly Lines', options=["Right","Both", "None"], defval="Right", group = monthlyGroup)
+extendLineMonthly   = (extendOptionMonthly == 'Right') ? extend.right :
+                     (extendOptionMonthly == 'Both') ? extend.both :
+                     extend.none
+linewidthMonthly    = input.int(1, "Line Thickness", group = monthlyGroup)
+styleOptionMonthly  = input.string(title='Line Style', options=["solid (─)", "dashed (╌)", "dotted (┈)"], defval="dashed (╌)", group = monthlyGroup)
+lineStyleMonthly    = (styleOptionMonthly == "dotted (┈)") ? line.style_dotted : 
+                      (styleOptionMonthly == "dashed (╌)") ? line.style_dashed :
+                      line.style_solid
+labelColorMonthly   = input.color(title='', defval=color.white, group = monthlyGroup, inline='labelMonthly')
+showMonthlyLabels   = input.bool(title='Show Monthly Level Labels', defval=true, group = monthlyGroup, inline='labelMonthly')
+labelMonTextOption  = input.string(title="Monthly Label Text Size", options=[ "Tiny", "Small", "Normal",  "Large", "Huge"], defval="Normal", group=monthlyGroup)
+labelMonTextSize    = switch labelMonTextOption
+    'Tiny' => size.tiny
+    'Small' => size.small
+    'Normal' => size.normal
+    'Large' => size.large
+    'Huge' => size.huge
+labeloffsetMonthly  = input.int(title='Monthly Label Offset', defval=10, group = monthlyGroup)
+
+//Creating a UDT to capture all relevant information for a given level
+type ValueLine
+    float price     = 0
+    int   barIndex  = bar_index
+    int   barTime   = time
+    label llabel
+    line  level
+
+// SessionHigh() returns the highest price during the specified 
+// session, optionally corrected for the given time zone.
+// Returns 'na' when the session hasn't started or isn't on the chart.
+SessionHigh(sessionTime, sessionTimeZone=syminfo.timezone) =>
+    insideSession = not na(time(timeframe.period, sessionTime, sessionTimeZone))
+    newDayofWeek  = (syminfo.session == session.regular and 
+                     (syminfo.type == "stock" or syminfo.type == "fund" or syminfo.type == "dr")) and 
+                     dayofweek(time, sessionTimeZone) != dayofweek(time, sessionTimeZone)[1]
+    var float sessionHighPrice = na
+    var int   sessionHighBarIndex = na
+    var int   sessionHighTime     = na
+
+    if insideSession and (not insideSession[1] or newDayofWeek)
+        sessionHighPrice := high
+        sessionHighBarIndex := bar_index
+        sessionHighTime     := time
+    else if insideSession
+        sessionHighPrice := math.max(sessionHighPrice, high)
+        if sessionHighPrice != sessionHighPrice[1]
+            sessionHighBarIndex := bar_index
+            sessionHighTime     := time
+    
+    [sessionHighPrice, sessionHighBarIndex, sessionHighTime]
+
+// SessionLow() returns the lowest price during the given session,
+// optionally corrected for the specified time zone.
+// Returns 'na' when the session hasn't started or isn't on the chart.
+SessionLow(sessionTime, sessionTimeZone=syminfo.timezone) =>
+    insideSession = not na(time(timeframe.period, sessionTime, sessionTimeZone))
+    newDayofWeek  =(syminfo.session == session.regular and 
+                     (syminfo.type == "stock" or syminfo.type == "fund" or syminfo.type == "dr")) and 
+                     dayofweek(time, sessionTimeZone) != dayofweek(time, sessionTimeZone)[1]
+    var float sessionLowPrice    = na
+    var int   sessionLowBarIndex = na
+    var int   sessionLowTime     = na
+
+    if insideSession and (not insideSession[1] or newDayofWeek)
+        sessionLowPrice := low
+        sessionLowBarIndex := bar_index
+        sessionLowTime     := time
+    else if insideSession
+        sessionLowPrice := math.min(sessionLowPrice, low)
+        if sessionLowPrice != sessionLowPrice[1]
+            sessionLowBarIndex := bar_index
+            sessionLowTime     := time
+
+    [sessionLowPrice, sessionLowBarIndex, sessionLowTime]
+
+// MonthName() returns the lowest price during the given session,
+// optionally corrected for the specified time zone.
+// Returns 'na' when the session hasn't started or isn't on the chart.
+MonthName(monthInput, sessionTimeZone=syminfo.timezone) =>
+    string monthName = switch monthInput
+        1 => "Jan"
+        2 => "Feb"
+        3 => "Mar"
+        4 => "Apr"
+        5 => "May"
+        6 => "Jun"
+        7 => "Jul"
+        8 => "Aug"
+        9 => "Sep"
+        10 => "Oct"
+        11 => "Nov"
+        12 => "Dec"
+
+    monthName
+
+updateLines(array<ValueLine> ValueLines, int numLines, int maxValueLines, bool showOlderLabels, int labelOffset) =>
+    
+    sizeArr = ValueLines.size()
+    
+    if sizeArr > 0
+        //Remove any line that is still stored beyond the numLines value
+        //also update label locations and lines locations of all but current line
+        for i = sizeArr - 1 to 0  
+            valueLine = ValueLines.get(i)
+
+            //if lines in array go above what user wants on screen, delete lines and labels for that valueline
+            if i < sizeArr - numLines
+                label.delete(valueLine.llabel)
+                line.delete(valueLine.level)
+            //Update prior line to stop at the previous bar
+            else if i < sizeArr - 1
+                valueLine.llabel.set_x(bar_index + labelOffset)
+                if not showOlderLabels
+                    valueLine.level.set_extend(extend.none)
+                    label.delete(valueLine.llabel)
+            else if i == sizeArr - 1
+                valueLine.level.set_x2(time)
+                valueLine.llabel.set_x(bar_index + labelOffset)
+        //Check if number of values in ValueLine array is greater than the max allowed
+        if ValueLines.size() >= maxValueLines
+            //If level is not na, shift out value and then delete line
+            firstEntry = ValueLines.shift()
+
+            if not na(firstEntry.level)
+                line.delete(firstEntry.level)
+            if not na(firstEntry.llabel)
+                label.delete(firstEntry.llabel)
+
+///////////////////////////////////////////////////////
+//////////   End Functions Section    /////////////////
+///////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////
+////        Variable Declaration        ///////////
+///////////////////////////////////////////////////
+//Timeframe variables
+newDay              = dayofweek(time, "America/New_York") != dayofweek(time, "America/New_York")[1]
+insideGlobexSession = not na(time(timeframe.period, "1800-0929", "America/New_York"))
+insideUSSession     = not na(time(timeframe.period, "0930-1600", "America/New_York"))
+newUSSession        = insideUSSession and not insideUSSession[1]
+endOfUSSession      = insideUSSession[1] and not insideUSSession
+newGlobexSession    = insideGlobexSession and not insideGlobexSession[1]
+rthOpenSess         = syminfo.session == session.regular and (syminfo.type == "stock" or syminfo.type == "fund" or syminfo.type == "dr") ? newDay : newUSSession
+newWeekRTH          = dayofweek(time, "America/New_York")[1] > dayofweek(time, "America/New_York") ? 1 : 0
+newWeekETH          = dayofweek(time, "America/New_York") == dayofweek.friday and endOfUSSession
+newWeek             = syminfo.session == session.regular and (syminfo.type == "stock" or syminfo.type == "fund" or syminfo.type == "dr") ? newWeekRTH : newWeekETH
+newMonthRTH         = dayofmonth(time, "America/New_York")[1] > dayofmonth(time, "America/New_York")
+newMonthETH         = dayofmonth(time, "America/New_York")[1] > dayofmonth(time + 86400000, "America/New_York") and endOfUSSession
+newMonth            = syminfo.session == session.regular and (syminfo.type == "stock" or syminfo.type == "fund" or syminfo.type == "dr") ? newMonthRTH : newMonthETH
+
+//Determines RTH vs. ETH for futures charts since pinscript shows session.regular 
+//regardless of having RTH or ETH selected
+bool futuresNewSession = na
+var bool futuresRTH    = na
+if barstate.isfirst and syminfo.type == "futures"
+    if hour(time, "America/New_York") == 18 and minute(time, "America/New_York") == 00
+        futuresRTH        := false
+    else
+        futuresRTH        := true
+
+if futuresRTH == true
+    futuresNewSession := rthOpenSess
+else
+    futuresNewSession := newGlobexSession
+
+var prevDayHigh    = high
+var prevDayLow     = low
+var prevDayClose   = close
+var prevDayMid     = hl2
+var prevDayOCMid   = (open + close) / 2
+var rthOpen        = open
+var globexOpen     = open
+var t2High         = high[2]
+var t2Low          = low[2]
+var onHigh         = high
+var onLow          = low
+var prevWeekHigh   = high
+var prevWeekLow    = low
+var prevWeek50HL   = hl2
+var prevWeek50OC   = (open + close) / 2
+var rthWeekOpen    = open
+var prevWeekClose  = close
+var prevMonthHigh  = high
+var prevMonthLow   = low
+var prevMonth50HL  = hl2
+var prevMonth50OC  = (open + close) / 2
+var rthMonthOpen   = open
+var prevMonthClose = close
+
+var barIndex_prevDayHigh    = bar_index
+var barIndex_prevDayLow     = bar_index
+var barIndex_prevDayClose   = bar_index
+var barIndex_prevDayMid     = bar_index
+var barIndex_prevDayOCMid   = bar_index
+var barIndex_rthOpen        = bar_index
+var barIndex_globexOpen     = bar_index
+var barIndex_t2High         = bar_index
+var barIndex_t2Low          = bar_index
+var barIndex_onHigh         = bar_index
+var barIndex_onLow          = bar_index
+var barIndex_prevWeekHigh   = bar_index
+var barIndex_prevWeekLow    = bar_index
+var barIndex_prevWeek50HL   = bar_index
+var barIndex_prevWeek50OC   = bar_index
+var barIndex_rthWeekOpen    = bar_index
+var barIndex_prevWeekClose  = bar_index
+var barIndex_prevMonthHigh  = bar_index
+var barIndex_prevMonthLow   = bar_index
+var barIndex_prevMonth50HL  = bar_index
+var barIndex_prevMonth50OC  = bar_index
+var barIndex_rthMonthOpen   = bar_index
+var barIndex_prevMonthClose = bar_index
+
+var time_prevDayHigh    = time
+var time_prevDayLow     = time
+var time_prevDayClose   = time
+var time_prevDayMid     = time
+var time_prevDayOCMid   = time
+var time_rthOpen        = time
+var time_globexOpen     = time
+var time_t2High         = time
+var time_t2Low          = time
+var time_onHigh         = time
+var time_onLow          = time
+var time_prevWeekHigh   = time
+var time_prevWeekLow    = time
+var time_prevWeek50HL   = time
+var time_prevWeek50OC   = time
+var time_rthWeekOpen    = time
+var time_prevWeekClose  = time
+var time_prevMonthHigh  = time
+var time_prevMonthLow   = time
+var time_prevMonth50HL  = time
+var time_prevMonth50OC  = time
+var time_rthMonthOpen   = time
+var time_prevMonthClose = time
+
+//Array Initialization
+var int MAX_DAILY_LINES    = 40
+var int MAX_WEEKLY_LINES   = 10
+var int MAX_MONTHLY_LINES = 10
+var prevHigh_Arr   = array.new<ValueLine>(0)
+var prevLow_Arr    = array.new<ValueLine>(0)
+var prev50HL_Arr   = array.new<ValueLine>(0)
+var prev50OC_Arr   = array.new<ValueLine>(0)
+var t2High_Arr     = array.new<ValueLine>(0)
+var t2Low_Arr      = array.new<ValueLine>(0)
+var prevClose_Arr  = array.new<ValueLine>(0)
+var rthOpen_Arr    = array.new<ValueLine>(0)
+var globexOpen_Arr = array.new<ValueLine>(0)
+var onHigh_Arr     = array.new<ValueLine>(0)
+var onLow_Arr      = array.new<ValueLine>(0)
+
+var newWeekVar = false
+var prevWeekHigh_Arr  = array.new<ValueLine>(0)
+var prevWeekLow_Arr   = array.new<ValueLine>(0)
+var prevWeek50HL_Arr  = array.new<ValueLine>(0)
+var prevWeek50OC_Arr  = array.new<ValueLine>(0)
+var rthWeekOpen_Arr   = array.new<ValueLine>(0)
+var prevWeekClose_Arr = array.new<ValueLine>(0)
+
+var newMonthVar = false
+var prevMonthHigh_Arr  = array.new<ValueLine>(0)
+var prevMonthLow_Arr   = array.new<ValueLine>(0)
+var prevMonth50HL_Arr  = array.new<ValueLine>(0)
+var prevMonth50OC_Arr  = array.new<ValueLine>(0)
+var rthMonthOpen_Arr   = array.new<ValueLine>(0)
+var prevMonthClose_Arr = array.new<ValueLine>(0)
+
+[sessionHighPrice, sessionHighBarIndex, sessionHighTime] = SessionHigh("0930-1600", "America/New_York")
+[sessionLowPrice , sessionLowBarIndex, sessionLowTime]   = SessionLow("0930-1600", "America/New_York")
+
+//Overnight Calculations
+//Overnight variables
+var ONsessionHighPrice     = high
+var ONsessionHighBarIndex  = bar_index 
+var ONsessionHighTime      = time
+var ONsessionLowPrice      = low
+var ONsessionLowBarIndex   = bar_index 
+var ONsessionLowTime       = time
+
+//Overnight session for futures starts at 1800 while all other stocks/funds start at 1600
+//This is a filter to change the ON sessiong function call depending on what ticker is selected
+if syminfo.type == "futures"
+    [ONsessionHighPrice_Fut, ONsessionHighBarIndex_Fut, ONsessionHighTime_Fut] = SessionHigh("1800-0930", "America/New_York")
+    [ONsessionLowPrice_Fut, ONsessionLowBarIndex_Fut , ONsessionLowTime_Fut]  = SessionLow("1800-0930", "America/New_York")
+    ONsessionHighPrice    := ONsessionHighPrice_Fut
+    ONsessionHighBarIndex := ONsessionHighBarIndex_Fut
+    ONsessionHighTime     := ONsessionHighTime_Fut
+    ONsessionLowPrice     := ONsessionLowPrice_Fut
+    ONsessionLowBarIndex  := ONsessionLowBarIndex_Fut
+    ONsessionLowTime      := ONsessionLowTime_Fut
+else
+    [ONsessionHighPrice_Sec, ONsessionHighBarIndex_Sec, ONsessionHighTime_Sec] = SessionHigh("1600-0930", "America/New_York")
+    [ONsessionLowPrice_Sec, ONsessionLowBarIndex_Sec, ONsessionLowTime_Sec]    = SessionLow("1600-0930", "America/New_York")
+    ONsessionHighPrice    := ONsessionHighPrice_Sec
+    ONsessionHighBarIndex := ONsessionHighBarIndex_Sec
+    ONsessionHighTime     := ONsessionHighTime_Sec
+    ONsessionLowPrice     := ONsessionLowPrice_Sec
+    ONsessionLowBarIndex  := ONsessionLowBarIndex_Sec
+    ONsessionLowTime      := ONsessionLowTime_Sec
+
+//Overnight Levels when an RTH Chart is being shown need to be gathered via request secutiry function with extended hours checked
+[ONsessionHighPrice_RS, ONsessionHighBarIndex_RS, ONsessionHighTime_RS] = request.security(ticker.modify(syminfo.tickerid, session.extended), "30", SessionHigh("1800-0930", "America/New_York"), lookahead=barmerge.lookahead_on)
+[ONsessionLowPrice_RS, ONsessionLowBarIndex_RS, ONsessionLowTime_RS]    = request.security(ticker.modify(syminfo.tickerid, session.extended), "30", SessionLow("1800-0930", "America/New_York"), lookahead=barmerge.lookahead_on)
+globexOpenPrice_RS          = request.security(syminfo.tickerid, "D", open, lookahead=barmerge.lookahead_on)
+
+
+//Weekly level Calculations
+if newWeek
+    barIndex_prevWeek50HL  := barIndex_rthWeekOpen
+    barIndex_prevWeek50OC  := barIndex_rthWeekOpen
+    time_prevWeek50HL      := time_rthWeekOpen
+    time_prevWeek50OC      := time_rthWeekOpen
+
+if newMonth 
+    barIndex_prevMonth50HL  := barIndex_rthMonthOpen
+    barIndex_prevMonth50OC  := barIndex_rthMonthOpen
+    time_prevMonth50HL      := time_rthMonthOpen
+    time_prevMonth50OC      := time_rthMonthOpen
+
+if newGlobexSession and syminfo.type == "futures"
+    globexOpen            := open
+    barIndex_globexOpen   := bar_index
+    time_globexOpen       := time
+
+if rthOpenSess
+    //for RTH stock charts use newday to filter when to save prev day prices
+    if (syminfo.type == "stock" or syminfo.type == "fund" or syminfo.type == "dr") and syminfo.session == session.regular
+        //Daily Level Calculations for RTH Charts (i.e. strictly 9:30AM - 4PM)
+        prevDayClose          := close[1]
+        barIndex_prevDayClose := bar_index[1]
+        time_prevDayClose     := time[1]
+        t2High                := prevDayHigh
+        t2Low                 := prevDayLow
+        prevDayHigh           := sessionHighPrice[1]
+        prevDayLow            := sessionLowPrice[1]
+        prevDayMid            := math.round_to_mintick((prevDayHigh + prevDayLow) / 2)
+        prevDayOCMid          := math.round_to_mintick((prevDayClose + rthOpen) / 2)
+
+        barIndex_t2High       := barIndex_prevDayHigh
+        barIndex_t2Low        := barIndex_prevDayLow
+        barIndex_prevDayHigh  := sessionHighBarIndex[1]
+        barIndex_prevDayLow   := sessionLowBarIndex[1]
+
+        time_t2High           := time_prevDayHigh
+        time_t2Low            := time_prevDayLow
+        time_prevDayHigh      := sessionHighTime[1]
+        time_prevDayLow       := sessionLowTime[1]
+
+        if prevWeekHigh < prevDayHigh
+            prevWeekHigh          := prevDayHigh
+            barIndex_prevWeekHigh := barIndex_prevDayHigh
+            time_prevWeekHigh     := time_prevDayHigh
+        if prevWeekLow > prevDayLow
+            prevWeekLow           := prevDayLow
+            barIndex_prevWeekLow  := barIndex_prevDayLow
+            time_prevWeekLow      := time_prevDayLow
+        prevWeek50HL := (prevWeekHigh + prevWeekLow) / 2
+
+        if prevMonthHigh < prevDayHigh
+            prevMonthHigh          := prevDayHigh
+            barIndex_prevMonthHigh := barIndex_prevDayHigh
+            time_prevMonthHigh     := time_prevDayHigh
+        if prevMonthLow > prevDayLow
+            prevMonthLow          := prevDayLow
+            barIndex_prevMonthLow := barIndex_prevDayLow
+            time_prevMonthLow     := time_prevDayLow
+        prevMonth50HL := (prevMonthHigh + prevMonthLow) / 2
+
+    //Filter to determine if we are in RTH for either futures or stocks/funds, if we are, use the request security data from line 430, otherwise use the sessionHigh/Low function
+    if ((syminfo.type == "stock" or syminfo.type == "fund" or syminfo.type == "dr") and syminfo.session == session.regular) or futuresRTH == true
+        onHigh            := ONsessionHighPrice_RS
+        onLow             := ONsessionLowPrice_RS        
+        barIndex_onHigh   := bar_index
+        barIndex_onLow    := bar_index 
+        time_onHigh       := time
+        time_onLow        := time
+
+        if syminfo.type == "futures"
+            globexOpen          := globexOpenPrice_RS
+            barIndex_globexOpen := bar_index
+            time_globexOpen     := time
+
+    else    
+        onHigh            := ONsessionHighPrice[1]
+        onLow             := ONsessionLowPrice[1]         
+        barIndex_onHigh   := ONsessionHighBarIndex[1]
+        barIndex_onLow    := ONsessionLowBarIndex[1]   
+        time_onHigh       := ONsessionHighTime[1]
+        time_onLow        := ONsessionLowTime[1]
+
+    barIndex_prevDayMid   := barIndex_rthOpen
+    barIndex_prevDayOCMid := barIndex_rthOpen
+    barIndex_rthOpen      := bar_index
+    time_prevDayMid       := time_rthOpen
+    time_prevDayOCMid     := time_rthOpen
+    time_rthOpen          := time
+    rthOpen               := open
+
+    if dayofweek(time, "America/New_York") == dayofweek.monday or 
+         (dayofweek(time_prevDayMid, "America/New_York") == dayofweek.friday and 
+             dayofweek(time, "America/New_York") == dayofweek.tuesday)
+        rthWeekOpen          := rthOpen
+        barIndex_rthWeekOpen := barIndex_rthOpen
+        time_rthWeekOpen     := time_rthOpen
+
+    //Monthly Calculations
+    if dayofmonth(time_prevDayMid, "America/New_York") >= 28 and
+         dayofmonth(time, "America/New_York") < dayofmonth(time_prevDayMid, "America/New_York")
+        rthMonthOpen          := rthOpen
+        barIndex_rthMonthOpen := barIndex_rthOpen
+        time_rthMonthOpen     := time_rthOpen
+
+//for ETH charts and capturing RTH close information at 4:00PM close
+if endOfUSSession
+    prevDayClose          := close[1]
+    t2High                := prevDayHigh
+    t2Low                 := prevDayLow
+    prevDayHigh           := sessionHighPrice[1]
+    prevDayLow            := sessionLowPrice[1]
+    prevDayMid            := math.round_to_mintick((prevDayHigh + prevDayLow) / 2)
+    prevDayOCMid          := math.round_to_mintick((prevDayClose + rthOpen) / 2)
+    
+    barIndex_prevDayClose := bar_index[1]
+    barIndex_t2High       := barIndex_prevDayHigh
+    barIndex_t2Low        := barIndex_prevDayLow
+    barIndex_prevDayHigh  := sessionHighBarIndex[1]
+    barIndex_prevDayLow   := sessionLowBarIndex[1]
+    barIndex_prevDayMid   := barIndex_rthOpen
+    barIndex_prevDayOCMid := barIndex_rthOpen
+
+    time_prevDayClose     := time[1]
+    time_t2High           := time_prevDayHigh
+    time_t2Low            := time_prevDayLow
+    time_prevDayHigh      := sessionHighTime[1]
+    time_prevDayLow       := sessionLowTime[1]
+    time_prevDayMid       := time_rthOpen
+    time_prevDayOCMid     := time_rthOpen
+
+    //Weekly Level Calculations
+    if prevWeekHigh < prevDayHigh
+        prevWeekHigh          := prevDayHigh
+        barIndex_prevWeekHigh := barIndex_prevDayHigh
+        time_prevWeekHigh     := time_prevDayHigh
+    if prevWeekLow > prevDayLow
+        prevWeekLow           := prevDayLow
+        barIndex_prevWeekLow  := barIndex_prevDayLow
+        time_prevWeekLow      := time_prevDayLow
+    prevWeek50HL := (prevWeekHigh + prevWeekLow) / 2
+
+    //Monthly Calculations
+    if prevMonthHigh < prevDayHigh
+        prevMonthHigh          := prevDayHigh
+        barIndex_prevMonthHigh := barIndex_prevDayHigh
+        time_prevMonthHigh     := time_prevDayHigh
+    if prevMonthLow > prevDayLow
+        prevMonthLow          := prevDayLow
+        barIndex_prevMonthLow := barIndex_prevDayLow
+        time_prevMonthLow     := time_prevDayLow
+    prevMonth50HL := (prevMonthHigh + prevMonthLow) / 2
+
+if newWeek
+    prevWeekClose          := prevDayClose
+    barIndex_prevWeekClose := barIndex_prevDayClose
+    time_prevWeekClose     := time_prevDayClose
+    prevWeek50OC           := (prevWeekClose + rthWeekOpen) / 2
+
+if newMonth
+    prevMonthClose          := prevDayClose
+    barIndex_prevMonthClose := barIndex_prevDayClose
+    time_prevMonthClose     := time_prevDayClose
+    prevMonth50OC           := (prevMonthClose + rthMonthOpen[1]) / 2
+
+//New Session Filters for all types of tickers
+//Globex Open Filter (Futures)
+//End of US Session (Forex and Crypto)
+//New Day filter (Securities and Indexes) when showing only RTH
+//End of RTH filter (Securities and Indexes) when showing ETH
+resetLineFilter = (syminfo.type == "futures" and futuresNewSession) or
+                 ( (syminfo.type =="crypto" or syminfo.type == "forex") and endOfUSSession) or
+                 (((syminfo.type == "stock" or syminfo.type == "index" or syminfo.type == "fund" or syminfo.type == "dr") and syminfo.session == session.regular) and newDay) or
+                 (((syminfo.type == "stock" or syminfo.type == "index" or syminfo.type == "fund" or syminfo.type == "dr") and syminfo.session == session.extended) and endOfUSSession)
+//Pushing values collected above into a label description, line color, and level values
+//Only show on 30m chart or below
+if showDailyLevels == true and timeframe.in_seconds() <= timeframe.in_seconds("30")
+
+    initialLabelOffset = bar_index + labeloffsetDaily
+
+    //Globex Open
+    if showGlobexOpen == true
+        if futuresNewSession and syminfo.type == "futures"
+            globexOpen_Name    = "Globex Open: " + str.tostring(globexOpen, format.mintick)
+            newGlobexOpen      = ValueLine.new(price = globexOpen,
+                                             barIndex = barIndex_globexOpen,
+                                             barTime = time_globexOpen,
+                                             llabel = showDailyLabels ? label.new(initialLabelOffset, globexOpen, 
+                                                 globexOpen_Name, xloc = xloc.bar_index, textcolor = labelColorDaily,  
+                                                 textalign = text.align_right, style = label.style_none, size = labelDailyTextSize) : na,
+                                             level = line.new(time_globexOpen, globexOpen, time, globexOpen, 
+                                                 xloc.bar_time, extend = extendLineDaily, color = globexOpenColor,
+                                                 style = lineStyleDaily, width = linewidthDaily))
+            globexOpen_Arr.push(newGlobexOpen)
+    
+        updateLines(globexOpen_Arr, numDailyPeriods, MAX_DAILY_LINES, false, labeloffsetDaily)
+    
+    //RTH Open
+    if showRthOpen == true
+        if rthOpenSess
+            rthOpen_Name    = "RTH Open: " + str.tostring(rthOpen, format.mintick)
+            newRthOpen      = ValueLine.new(price = rthOpen,
+                                             barIndex = barIndex_rthOpen,
+                                             barTime = time_rthOpen,
+                                             llabel = showDailyLabels ? label.new(initialLabelOffset, rthOpen, 
+                                              rthOpen_Name, xloc = xloc.bar_index, textcolor = labelColorDaily, 
+                                              textalign = text.align_right, style = label.style_none, size = labelDailyTextSize) : na,
+                                             level = line.new(time_rthOpen, rthOpen, time, rthOpen, 
+                                                 xloc.bar_time, extend = extendLineDaily, color = rthOpenColor,
+                                                 style = lineStyleDaily, width = linewidthDaily))
+            rthOpen_Arr.push(newRthOpen)
+    
+        updateLines(rthOpen_Arr, numDailyPeriods, MAX_DAILY_LINES, false, labeloffsetDaily)
+
+    //Overnight High
+    if showOnHigh == true
+        if rthOpenSess
+            onHigh_Name    = "Overnight High: " + str.tostring(onHigh, format.mintick)
+            newONHigh     = ValueLine.new(price = onHigh,
+                                             barIndex = barIndex_onHigh,
+                                             barTime = time_onHigh,
+                                             llabel = showDailyLabels ? label.new(initialLabelOffset, onHigh, 
+                                                 onHigh_Name, xloc = xloc.bar_index, textcolor = labelColorDaily, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelDailyTextSize) : na,
+                                             level = line.new(time_onHigh, onHigh, time, onHigh, 
+                                                 xloc.bar_time, extend = extendLineDaily, color = onHighColor,
+                                                 style = lineStyleDaily, width = linewidthDaily))
+            onHigh_Arr.push(newONHigh)
+    
+        updateLines(onHigh_Arr, numDailyPeriods, MAX_DAILY_LINES, false, labeloffsetDaily)
+
+    //Overnight Low
+    if showOnLow == true
+        if rthOpenSess
+            onLow_Name    = "Overnight Low: " + str.tostring(onLow, format.mintick)
+            newONLow     = ValueLine.new(price = onLow,
+                                             barIndex = barIndex_onHigh,
+                                             barTime = time_onLow,
+                                             llabel = showDailyLabels ? label.new(initialLabelOffset, onLow, 
+                                                 onLow_Name, xloc = xloc.bar_index, textcolor = labelColorDaily, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelDailyTextSize) : na,
+                                             level = line.new(time_onLow, onLow, time, onLow, 
+                                                 xloc.bar_time, extend = extendLineDaily, color = onLowColor,
+                                                 style = lineStyleDaily, width = linewidthDaily))
+            onLow_Arr.push(newONLow)
+    
+        updateLines(onLow_Arr, numDailyPeriods, MAX_DAILY_LINES, false, labeloffsetDaily)
+
+    if showPrevHigh == true
+        if resetLineFilter
+            prevdayHigh_Name = "Prev Day High: " + str.tostring(prevDayHigh, format.mintick)
+            newPrevHigh      = ValueLine.new(price = prevDayHigh,
+                                             barIndex = barIndex_prevDayHigh,
+                                             barTime = time_prevDayHigh,
+                                             llabel = showDailyLabels ? label.new(initialLabelOffset, prevDayHigh, 
+                                                 prevdayHigh_Name, xloc = xloc.bar_index, textcolor = labelColorDaily,
+                                                 textalign = text.align_right, style = label.style_none, size = labelDailyTextSize) : na,
+                                             level = line.new(time_prevDayHigh, prevDayHigh, time, prevDayHigh, 
+                                                 xloc.bar_time, extend = extendLineDaily, color = prevHighColor,
+                                                 style = lineStyleDaily, width = linewidthDaily))
+            prevHigh_Arr.push(newPrevHigh)
+        updateLines(prevHigh_Arr, numDailyPeriods, MAX_DAILY_LINES, false, labeloffsetDaily)
+
+    if showPrevLow == true
+        if resetLineFilter
+            prevdayLow_Name = "Prev Day Low: " + str.tostring(prevDayLow, format.mintick)
+            newPrevLow      = ValueLine.new(price = prevDayLow,
+                                             barIndex = barIndex_prevDayLow,
+                                             barTime = time_prevDayLow,
+                                             llabel = showDailyLabels ? label.new(initialLabelOffset, prevDayLow, 
+                                                 prevdayLow_Name, xloc = xloc.bar_index, textcolor = labelColorDaily,
+                                                 textalign = text.align_right, style = label.style_none, size = labelDailyTextSize): na,
+                                             level = line.new(time_prevDayLow, prevDayLow, time, prevDayLow, 
+                                                 xloc.bar_time, extend = extendLineDaily, color = prevLowColor,
+                                                 style = lineStyleDaily, width = linewidthDaily))
+            prevLow_Arr.push(newPrevLow)
+        updateLines(prevLow_Arr, numDailyPeriods, MAX_DAILY_LINES, false, labeloffsetDaily)
+
+    if showPrevMidHL == true
+        if resetLineFilter
+            prevDayMid_Name = "Prev Day Mid (HL2): " + str.tostring(prevDayMid, format.mintick)
+            newPrevMid      = ValueLine.new(price = prevDayMid,
+                                             barIndex = barIndex_prevDayMid,
+                                             barTime = time_prevDayMid,
+                                             llabel = showDailyLabels ? label.new(initialLabelOffset, prevDayMid, 
+                                                 prevDayMid_Name, xloc = xloc.bar_index, textcolor = labelColorDaily, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelDailyTextSize) : na,
+                                             level = line.new(time_prevDayMid, prevDayMid, time, prevDayMid, 
+                                                 xloc.bar_time, extend = extendLineDaily, color = midHLColor,
+                                                 style = lineStyleDaily, width = linewidthDaily))
+            prev50HL_Arr.push(newPrevMid)
+        updateLines(prev50HL_Arr, numDailyPeriods, MAX_DAILY_LINES, false, labeloffsetDaily)
+
+    if showPrevMidOC == true
+        if resetLineFilter
+            prevDayOCMid_Name = "Prev Day Mid (OC2): " + str.tostring(prevDayOCMid, format.mintick)
+            newPrevMidOC    = ValueLine.new(price = prevDayOCMid,
+                                             barIndex = barIndex_prevDayMid,
+                                             barTime = time_prevDayMid,
+                                             llabel = showDailyLabels ? label.new(initialLabelOffset, prevDayOCMid,
+                                                 prevDayOCMid_Name, xloc = xloc.bar_index, textcolor = labelColorDaily, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelDailyTextSize) : na,
+                                             level = line.new(time_prevDayOCMid, prevDayOCMid, time, prevDayOCMid, 
+                                                 xloc.bar_time, extend = extendLineDaily, color = midOCColor,
+                                                 style = lineStyleDaily, width = linewidthDaily))
+            prev50OC_Arr.push(newPrevMidOC)
+        updateLines(prev50OC_Arr, numDailyPeriods, MAX_DAILY_LINES, false, labeloffsetDaily)    
+
+    if showPrevClose == true
+        if resetLineFilter
+            prevDayClose_Name = "Prev Day Close: " + str.tostring(prevDayClose, format.mintick)
+            newPrevClose      = ValueLine.new(price = prevDayClose,
+                                             barIndex = barIndex_prevDayClose,
+                                             barTime = time_prevDayClose,
+                                             llabel = showDailyLabels ? label.new(initialLabelOffset, prevDayClose, 
+                                                 prevDayClose_Name, xloc = xloc.bar_index, textcolor = labelColorDaily, 
+                                                 textalign = text.align_left, style = label.style_none, size = labelDailyTextSize) : na,
+                                             level = line.new(time_prevDayClose, prevDayClose, time, prevDayClose, 
+                                                 xloc.bar_time, extend = extendLineDaily, color = prevCloseColor,
+                                                 style = lineStyleDaily, width = linewidthDaily))
+            prevClose_Arr.push(newPrevClose)
+        updateLines(prevClose_Arr, numDailyPeriods, MAX_DAILY_LINES, false, labeloffsetDaily) 
+
+    // //T+2 Settlement High/Low (settlement levels)
+    if showT2High == true
+        if resetLineFilter
+            t2High_Name = "T+2 High: " + str.tostring(t2High, format.mintick)
+            newt2High      = ValueLine.new(price = t2High,
+                                             barIndex = barIndex_t2High,
+                                             barTime = time_t2High,
+                                             llabel = showDailyLabels ? label.new(initialLabelOffset, t2High, 
+                                                 t2High_Name, xloc = xloc.bar_index, textcolor = labelColorDaily, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelDailyTextSize) : na,
+                                             level = line.new(time_t2High, t2High, time, t2High, 
+                                                 xloc.bar_time, extend = extendLineDaily, color = t2HighColor,
+                                                 style = lineStyleDaily, width = linewidthDaily))
+            t2High_Arr.push(newt2High)
+        updateLines(t2High_Arr, numDailyPeriods, MAX_DAILY_LINES, false, labeloffsetDaily)
+        
+    if showT2Low == true    
+        if resetLineFilter
+            t2Low_Name = "T+2 Low: " + str.tostring(t2Low, format.mintick)
+            newt2Low       = ValueLine.new(price = t2Low,
+                                             barIndex = barIndex_t2Low,
+                                             barTime = time_t2Low,
+                                             llabel = showDailyLabels ? label.new(initialLabelOffset, t2Low,
+                                                 t2Low_Name, xloc = xloc.bar_index, textcolor = labelColorDaily, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelDailyTextSize) : na,
+                                             level = line.new(time_t2Low, t2Low, time, t2Low,
+                                                 xloc.bar_time, extend = extendLineDaily, color = t2LowColor,
+                                                 style = lineStyleDaily, width = linewidthDaily))
+            t2Low_Arr.push(newt2Low)
+        updateLines(t2Low_Arr, numDailyPeriods, MAX_DAILY_LINES, false, labeloffsetDaily)      
+
+if showWeeklyLevels
+    
+    initialLabelOffset = bar_index + labeloffsetWeekly
+
+    if rthOpenSess and (dayofweek(time, "America/New_York") == dayofweek.monday or 
+         (dayofweek(time_prevDayMid, "America/New_York") == dayofweek.friday and 
+             dayofweek(time, "America/New_York") == dayofweek.tuesday))
+        if showRthWeekOpen
+            rthWeekOpen_Name = "Week of " + str.tostring(MonthName(month(time_rthWeekOpen))) + " " + 
+                                 str.tostring(dayofmonth(time_rthWeekOpen)) + " Open: " +
+                                 str.tostring(rthWeekOpen, format.mintick)
+            newrthWeekOpen   = ValueLine.new(price = rthWeekOpen,
+                                             barIndex = barIndex_rthWeekOpen,
+                                             barTime = time_rthWeekOpen,
+                                             llabel = showWeeklyLabels ? label.new(initialLabelOffset, rthWeekOpen,
+                                                 rthWeekOpen_Name, xloc = xloc.bar_index, textcolor = labelColorWeekly, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelWklyTextSize) : na,
+                                             level = line.new(time_rthWeekOpen, rthWeekOpen, time, rthWeekOpen,
+                                                 xloc.bar_time, extend = extendLineWeekly, color = wkOpenColor,
+                                                 style = lineStyleWeekly, width = linewidthWeekly))
+            rthWeekOpen_Arr.push(newrthWeekOpen)
+
+    if newWeek
+
+        if showPrevWeekHigh
+            prevWeekHigh_Name = "Week of " + str.tostring(MonthName(month(time_rthWeekOpen))) + " " + 
+                                 str.tostring(dayofmonth(time_rthWeekOpen)) + " High: " + 
+                                 str.tostring(prevWeekHigh, format.mintick)
+            newPrevWeekHigh   = ValueLine.new(price = prevWeekHigh,
+                                              barIndex = barIndex_prevWeekHigh,
+                                              barTime = time_prevWeekHigh,
+                                              llabel = showWeeklyLabels ? label.new(initialLabelOffset, prevWeekHigh,
+                                                 prevWeekHigh_Name, xloc = xloc.bar_index, textcolor = labelColorWeekly, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelWklyTextSize) : na,
+                                              level = line.new(time_prevWeekHigh, prevWeekHigh, time, prevWeekHigh,
+                                                 xloc.bar_time, extend = extendLineWeekly, color = wkHighColor,
+                                                 style = lineStyleWeekly, width = linewidthWeekly))
+            prevWeekHigh_Arr.push(newPrevWeekHigh)
+        prevWeekHigh := 0
+
+        if showPrevWeekLow
+            prevWeekLow_Name ="Week of " + str.tostring(MonthName(month(time_rthWeekOpen))) + " " + 
+                                 str.tostring(dayofmonth(time_rthWeekOpen)) + " Low: " + 
+                                 str.tostring(prevWeekLow, format.mintick)
+            newPrevWeekLow   = ValueLine.new(price = prevWeekLow,
+                                             barIndex = barIndex_prevWeekLow,
+                                             barTime = time_prevWeekLow,
+                                             llabel = showWeeklyLabels ? label.new(initialLabelOffset, prevWeekLow,
+                                                 prevWeekLow_Name, xloc = xloc.bar_index, textcolor = labelColorWeekly, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelWklyTextSize) : na,
+                                             level = line.new(time_prevWeekLow, prevWeekLow, time, prevWeekLow,
+                                                 xloc.bar_time, extend = extendLineWeekly, color = wkLowColor,
+                                                 style = lineStyleWeekly, width = linewidthWeekly))
+            prevWeekLow_Arr.push(newPrevWeekLow)
+        prevWeekLow := 100000000
+
+        if showPrevWeekHalfHL
+            prevWeek50HL_Name = "Week of " + str.tostring(MonthName(month(time_rthWeekOpen))) + " " + 
+                                 str.tostring(dayofmonth(time_rthWeekOpen)) + " HL2: " + 
+                                 str.tostring(prevWeek50HL, format.mintick)
+            newPrevWeek50HL   = ValueLine.new(price = prevWeek50HL,
+                                              barIndex = barIndex_prevWeek50HL,
+                                              barTime = time_prevWeek50HL,
+                                              llabel = showWeeklyLabels ? label.new(initialLabelOffset, prevWeek50HL,
+                                                 prevWeek50HL_Name, xloc = xloc.bar_index, textcolor = labelColorWeekly, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelWklyTextSize) : na,
+                                              level = line.new(time_prevWeek50HL, prevWeek50HL, time, prevWeek50HL,
+                                                 xloc.bar_time, extend = extendLineWeekly, color = wkHalfHLColor,
+                                                 style = lineStyleWeekly, width = linewidthWeekly))
+            prevWeek50HL_Arr.push(newPrevWeek50HL)
+
+        if showPrevWeekHalfOC
+            prevWeek50OC_Name = "Week of " + str.tostring(MonthName(month(time_rthWeekOpen))) + " " + 
+                                 str.tostring(dayofmonth(time_rthWeekOpen)) + " OC2: " + 
+                                 str.tostring(prevWeek50OC, format.mintick)
+            newPrevWeek50OC   = ValueLine.new(price = prevWeek50OC,
+                                              barIndex = barIndex_prevWeek50OC,
+                                              barTime = time_prevWeek50OC,
+                                              llabel = showWeeklyLabels ? label.new(initialLabelOffset, prevWeek50OC,
+                                                 prevWeek50OC_Name, xloc = xloc.bar_index, textcolor = labelColorWeekly, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelWklyTextSize) : na,
+                                              level = line.new(time_prevWeek50OC, prevWeek50OC, time, prevWeek50OC,
+                                                 xloc.bar_time, extend = extendLineWeekly, color = wkHalfOCColor,
+                                                 style = lineStyleWeekly, width = linewidthWeekly))
+            prevWeek50OC_Arr.push(newPrevWeek50OC)
+
+        if showPrevWeekClose
+            prevWeekClose_Name = "Week of " + str.tostring(MonthName(month(time_rthWeekOpen))) + " " + 
+                                 str.tostring(dayofmonth(time_rthWeekOpen)) + " Close: " + 
+                                 str.tostring(prevWeekClose, format.mintick)
+            newPrevWeekClose   = ValueLine.new(price = prevWeekClose,
+                                              barIndex = barIndex_prevWeekClose,
+                                              barTime = time_prevWeekClose,
+                                              llabel = showWeeklyLabels ? label.new(initialLabelOffset, prevWeekClose,
+                                                 prevWeekClose_Name, xloc = xloc.bar_index, textcolor = labelColorWeekly, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelWklyTextSize) : na,
+                                              level = line.new(time_prevWeekClose, prevWeekClose, time, prevWeekClose,
+                                                 xloc.bar_time, extend = extendLineWeekly, color = wkCloseColor,
+                                                 style = lineStyleWeekly, width = linewidthWeekly))
+            prevWeekClose_Arr.push(newPrevWeekClose)
+
+    updateLines(prevWeekHigh_Arr, numWklyPeriods, MAX_WEEKLY_LINES, true, labeloffsetWeekly)
+    updateLines(prevWeekLow_Arr , numWklyPeriods, MAX_WEEKLY_LINES, true, labeloffsetWeekly)
+    updateLines(prevWeek50HL_Arr, numWklyPeriods, MAX_WEEKLY_LINES, true, labeloffsetWeekly)
+    updateLines(prevWeek50OC_Arr, numWklyPeriods, MAX_WEEKLY_LINES, true, labeloffsetWeekly)
+    updateLines(rthWeekOpen_Arr, numWklyPeriods, MAX_WEEKLY_LINES, true, labeloffsetWeekly)
+    updateLines(prevWeekClose_Arr, numWklyPeriods, MAX_WEEKLY_LINES, true, labeloffsetWeekly)
+
+if showMonthlyLevels
+    
+    initialLabelOffset = bar_index + labeloffsetMonthly
+    
+    if rthOpenSess and (dayofmonth(time_prevDayMid, "America/New_York") >= 28 and
+         dayofmonth(time, "America/New_York") < dayofmonth(time_prevDayMid, "America/New_York"))
+        if showRthMonthOpen
+            rthMonthOpen_Name = str.tostring(MonthName(month(time_rthMonthOpen))) + " Open: " + str.tostring(rthMonthOpen, format.mintick)
+            newrthMonthOpen   = ValueLine.new(price = rthMonthOpen,
+                                         barIndex = barIndex_rthMonthOpen,
+                                         barTime = time_rthMonthOpen,
+                                         llabel = showMonthlyLabels ? label.new(initialLabelOffset, rthMonthOpen,
+                                             rthMonthOpen_Name, xloc = xloc.bar_index, textcolor = labelColorMonthly, 
+                                             textalign = text.align_right, style = label.style_none, size = labelMonTextSize) : na,
+                                         level = line.new(time_rthMonthOpen, rthMonthOpen, time, rthMonthOpen,
+                                             xloc.bar_time, extend = extendLineMonthly, color = wkOpenColor,
+                                             style = lineStyleMonthly, width = linewidthMonthly))
+            rthMonthOpen_Arr.push(newrthMonthOpen)
+
+    if newMonth
+        if showPrevMonthHigh
+            prevMonthHigh_Name = str.tostring(MonthName(month(time_rthMonthOpen))) + " High:" + str.tostring(prevMonthHigh, format.mintick)
+            newPrevMonthHigh   = ValueLine.new(price = prevMonthHigh,
+                                               barIndex = barIndex_prevMonthHigh,
+                                               barTime = time_prevMonthHigh,
+                                             llabel = showMonthlyLabels ? label.new(initialLabelOffset, prevMonthHigh,
+                                                 prevMonthHigh_Name, xloc = xloc.bar_index, textcolor = labelColorMonthly, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelMonTextSize) : na,
+                                             level = line.new(time_prevMonthHigh, prevMonthHigh, time, prevMonthHigh,
+                                                 xloc.bar_time, extend = extendLineMonthly, color = wkHighColor,
+                                                 style = lineStyleMonthly, width = linewidthMonthly))
+            prevMonthHigh_Arr.push(newPrevMonthHigh)
+        prevMonthHigh := 0
+        
+        if showPrevMonthLow
+            prevMonthLow_Name = str.tostring(MonthName(month(time_rthMonthOpen))) + " Low:" + str.tostring(prevMonthLow, format.mintick)
+            newPrevMonthLow   = ValueLine.new(price = prevMonthLow,
+                                              barIndex = barIndex_prevMonthLow,
+                                              barTime = time_prevMonthLow,
+                                             llabel = showMonthlyLabels ? label.new(initialLabelOffset, prevMonthLow,
+                                                 prevMonthLow_Name, xloc = xloc.bar_index, textcolor = labelColorMonthly, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelMonTextSize) : na,
+                                             level = line.new(time_prevMonthLow, prevMonthLow, time, prevMonthLow,
+                                                 xloc.bar_time, extend = extendLineMonthly, color = wkLowColor,
+                                                 style = lineStyleMonthly, width = linewidthMonthly))
+            prevMonthLow_Arr.push(newPrevMonthLow)
+        prevMonthLow := 100000000
+
+        if showPrevMonthHalfHL
+            prevMonth50HL_Name = str.tostring(MonthName(month(time_rthWeekOpen))) + " Mid (HL2): " + str.tostring(prevMonth50HL, format.mintick)
+            newPrevMonth50HL   = ValueLine.new(price = prevMonth50HL,
+                                              barIndex = barIndex_prevMonth50HL,
+                                              barTime = time_prevMonth50HL,
+                                             llabel = showMonthlyLabels ? label.new(initialLabelOffset, prevMonth50HL,
+                                                 prevMonth50HL_Name, xloc = xloc.bar_index, textcolor = labelColorMonthly, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelMonTextSize) : na,
+                                             level = line.new(time_prevMonth50HL, prevMonth50HL, time, prevMonth50HL,
+                                                 xloc.bar_time, extend = extendLineMonthly, color = wkHalfHLColor,
+                                                 style = lineStyleMonthly, width = linewidthMonthly))
+            prevMonth50HL_Arr.push(newPrevMonth50HL)
+
+        if showPrevMonthHalfOC
+            prevMonth50OC_Name = str.tostring(MonthName(month(time_rthWeekOpen))) + " Mid (OC2): " + str.tostring(prevMonth50OC, format.mintick)
+            newPrevMonth50OC   = ValueLine.new(price = prevMonth50OC,
+                                             barIndex = barIndex_prevMonth50OC,
+                                             barTime = time_prevMonth50OC,
+                                             llabel = showMonthlyLabels ? label.new(initialLabelOffset, prevMonth50OC,
+                                                 prevMonth50OC_Name, xloc = xloc.bar_index, textcolor = labelColorMonthly, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelMonTextSize) : na,
+                                             level = line.new(time_prevMonth50OC, prevMonth50OC, time, prevMonth50OC,
+                                                 xloc.bar_time, extend = extendLineMonthly, color = wkHalfOCColor,
+                                                 style = lineStyleMonthly, width = linewidthMonthly))
+            prevMonth50OC_Arr.push(newPrevMonth50OC)
+
+        if showPrevMonthClose
+            prevMonthClose_Name = str.tostring(MonthName(month(time_rthWeekOpen))) + " Close: " + str.tostring(prevMonthClose, format.mintick)
+            newPrevMonthClose   = ValueLine.new(price = prevMonthClose,
+                                             barIndex = barIndex_prevMonthClose,
+                                             barTime = time_prevMonthClose,
+                                             llabel = showMonthlyLabels ? label.new(initialLabelOffset, prevMonthClose,
+                                                 prevMonthClose_Name, xloc = xloc.bar_index, textcolor = labelColorMonthly, 
+                                                 textalign = text.align_right, style = label.style_none, size = labelMonTextSize) : na,
+                                             level = line.new(time_prevMonthClose, prevMonthClose, time, prevMonthClose,
+                                                 xloc.bar_time, extend = extendLineMonthly, color = wkCloseColor,
+                                                 style = lineStyleMonthly, width = linewidthMonthly))
+            prevMonthClose_Arr.push(newPrevMonthClose)
+
+    updateLines(prevMonthHigh_Arr, numMonPeriods, MAX_MONTHLY_LINES, true, labeloffsetMonthly)
+    updateLines(prevMonthLow_Arr , numMonPeriods, MAX_MONTHLY_LINES, true, labeloffsetMonthly)
+    updateLines(prevMonth50HL_Arr, numMonPeriods, MAX_MONTHLY_LINES, true, labeloffsetMonthly)
+    updateLines(prevMonth50OC_Arr, numMonPeriods, MAX_MONTHLY_LINES, true, labeloffsetMonthly)
+    updateLines(rthMonthOpen_Arr, numMonPeriods, MAX_MONTHLY_LINES, true, labeloffsetMonthly)
+    updateLines(prevMonthClose_Arr, numMonPeriods, MAX_MONTHLY_LINES, true, labeloffsetMonthly)
+
+//////////////////////////////
+// Intraday Market Breatdth //
+//////////////////////////////
+//variable declaration
+showMarketBreadth = input.bool(title="Show Market Breadth Table", defval=true, group="Market Breadth")
+showUpDownVol     = input.bool(title="Show NYSE/NASDAQ Breadth", defval=true, group="Market Breadth")
+showADD           = input.bool(title="Show Advance/Decline Value", defval=true, group="Market Breadth")
+showTRIN          = input.bool(title="Show TRIN.US", defval=false, group="Market Breadth")
+showTICK          = input.bool(title="Show TICK", defval=false, group="Market Breadth")
+showVIX           = input.bool(title="Show VIX", defval=false, group="Market Breadth")
+showVXN           = input.bool(title="Show VXN", defval=false, group="Market Breadth")
+showSecurity1     = input.bool(title="", defval=false, group="Market Breadth", inline = "sym1")
+security1         = input.symbol(title="", defval = "ES1!", group="Market Breadth", inline="sym1")
+showSecurity2     = input.bool(title="", defval=false, group="Market Breadth", inline = "sym2")
+security2         = input.symbol(title="", defval = "NQ1!", group="Market Breadth", inline="sym2")
+showSecurity3     = input.bool(title="", defval=false, group="Market Breadth", inline = "sym3")
+security3         = input.symbol(title="", defval = "TVC:DXY", group="Market Breadth", inline="sym3")
+showSecurity4     = input.bool(title="", defval=false, group="Market Breadth", inline = "sym4")
+security4         = input.symbol(title="", defval = "YM1!", group="Market Breadth", inline="sym4")
+showSecurity5     = input.bool(title="", defval=false, group="Market Breadth", inline = "sym5")
+security5         = input.symbol(title="", defval = "CL1!", group="Market Breadth", inline="sym5")
+showTPOInfo       = input.bool(title="Show Market Profile TPO Period", defval=false, group="Market Breadth")
+sizeOption        = input.string(title="Text Size", options=["Small", "Normal", "Large"], defval="Normal", group='Market Breadth', inline='mb')
+textSize          = (sizeOption == "Small") ? size.small : 
+                     (sizeOption == "Normal") ? size.normal :
+                     size.large
+
+//option for where you want to table to be
+positionOption  = input.string(title="Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], defval="Top Right", group='Market Breadth', inline='mb')
+position        = (positionOption == "Top Right") ? position.top_right :
+                   (positionOption == "Top Left") ? position.top_left :
+                   (positionOption == "Bottom Right") ? position.bottom_right :
+                   position.bottom_left
+             
+//Up and down VOL for NYSE and NASDAQ
+UVOL = request.security("USI:UVOL","",close)
+DVOL = request.security("USI:DVOL","",close)
+UVOLQ = request.security("USI:UVOLQ","",close)
+DVOLQ = request.security("USI:DVOLQ","",close)
+
+//ADD data
+ADVDCL = request.security("ADD","",close)
+
+//TRIN data
+TRIN = request.security("USI:TRIN.NY","",close)
+
+//TICK
+TICK = request.security("USI:TICK", "",close)
+
+//VIX
+VIX = request.security("TVC:VIX","",close)
+//VXN NASDAQ Volatility Index
+VXN = request.security("CBOE:VXN","",close)
+
+//SECURITES
+SEC1 = request.security(security1, "", close)
+SEC2 = request.security(security2, "", close)
+SEC3 = request.security(security3, "", close)
+SEC4 = request.security(security4, "", close)
+SEC5 = request.security(security5, "", close)
+
+//NYSE Breadth
+NYSEratio = UVOL >= DVOL ? UVOL/DVOL : -(DVOL/UVOL)
+
+//NASDAQ Breadth
+NASDAQratio = UVOLQ >= DVOLQ ? UVOLQ/DVOLQ : -(DVOLQ/UVOLQ)
+
+//Table Creation
+var table breadthTable = table.new(position, 3, 7, border_color = color.black, border_width = 1)
+string breadthformat = '##.##'
+string addformat = ''
+
+//Plot Table
+if barstate.islast and showMarketBreadth == true
+    if showUpDownVol == true
+        table.cell(breadthTable, 2, 0, str.tostring(NYSEratio, breadthformat) + " NYSE", text_size = textSize, text_color = #000000, bgcolor = NYSEratio > 0 ? color.green : color.red)
+        table.cell(breadthTable, 2, 1, str.tostring(NASDAQratio, breadthformat) + " NASD", text_size = textSize, text_color = #000000, bgcolor = NASDAQratio > 0 ? color.green : color.red)
+    if showADD == true
+        table.cell(breadthTable, 2, 2, str.tostring(ADVDCL, addformat) + " ADD", text_size = textSize, text_color = #000000, bgcolor = ADVDCL > 0 ? color.green : color.red)
+    
+    if showVIX == true
+        table.cell(breadthTable, 2, 3, str.tostring(VIX, format.mintick) + " VIX", text_size = textSize, text_color = #000000, bgcolor = VIX > VIX[1] ? color.green : color.red)
+    
+    if showVXN == true
+        table.cell(breadthTable, 2, 4, str.tostring(VXN, format.mintick) + " VXN", text_size = textSize, text_color = #000000, bgcolor = VXN > VXN[1] ? color.green : color.red)
+    
+    if showTRIN == true
+        table.cell(breadthTable, 2, 5, str.tostring(TRIN, format.mintick) + " TRIN", text_size = textSize, text_color = #000000, bgcolor = TRIN < 0.5 ? color.green : TRIN > 1.6 ? color.red : color.white)
+    
+    if showTICK == true
+        table.cell(breadthTable, 2, 6, str.tostring(TICK, format.mintick) + syminfo.type +" TICK", text_size = textSize, text_color = #000000, bgcolor = TICK > 0 ? color.green : color.red)
+
+    if showSecurity1 == true
+        table.cell(breadthTable, 1, 0, str.tostring(syminfo.ticker(security1)) + " " + str.tostring(SEC1, format.mintick), text_size= textSize, text_color = #000000, bgcolor = SEC1 > SEC1[1] ? color.green : color.red)
+    if showSecurity2 == true
+        table.cell(breadthTable, 1, 1, str.tostring(syminfo.ticker(security2)) + " " + str.tostring(SEC2, format.mintick), text_size= textSize, text_color = #000000, bgcolor = SEC2 > SEC2[1] ? color.green : color.red)
+    if showSecurity3 == true
+        table.cell(breadthTable, 1, 2, str.tostring(syminfo.ticker(security3)) + " " + str.tostring(SEC3, format.mintick), text_size= textSize, text_color = #000000, bgcolor = SEC3 > SEC3[1] ? color.green : color.red)
+    if showSecurity4 == true
+        table.cell(breadthTable, 1, 3, str.tostring(syminfo.ticker(security4)) + " " + str.tostring(SEC4, format.mintick), text_size= textSize, text_color = #000000, bgcolor = SEC4 > SEC4[1] ? color.green : color.red)
+    if showSecurity5 == true
+        table.cell(breadthTable, 1, 4, str.tostring(syminfo.ticker(security5)) + " " + str.tostring(SEC5, format.mintick), text_size= textSize, text_color = #000000, bgcolor = SEC5 > SEC5[1] ? color.green : color.red)     
+
+/////////////////////////////////////
+//// Market Profile Period /////////
+////////////////////////////////////
+// Get seconds till 30m bar closes
+timeLeft = barstate.isrealtime ?
+     (time_close("30") - timenow) / 1000 :
+     na
+
+// Translate seconds left into minutes and seconds
+minsLeft = math.floor(timeLeft / 60)
+secsLeft = timeLeft % 60
+string secsFormat = '##'
+
+//timeframe.change(30) provides boolean when 30 min timeframe changes
+TPO_DESC              = array.new<string>(0)
+var int count         = 0
+
+//TPO periods RTH A-O
+//TPO periods globex P-x
+array.push(TPO_DESC, "A") //RTH open
+array.push(TPO_DESC, "B")
+array.push(TPO_DESC, "C")
+array.push(TPO_DESC, "D")
+array.push(TPO_DESC, "E")
+array.push(TPO_DESC, "F")
+array.push(TPO_DESC, "G")
+array.push(TPO_DESC, "H")
+array.push(TPO_DESC, "I")
+array.push(TPO_DESC, "J")
+array.push(TPO_DESC, "K")
+array.push(TPO_DESC, "L")
+array.push(TPO_DESC, "M")
+array.push(TPO_DESC, "N")
+array.push(TPO_DESC, "O")
+array.push(TPO_DESC, "R") //globex open period
+array.push(TPO_DESC, "S")
+array.push(TPO_DESC, "T")
+array.push(TPO_DESC, "U")
+array.push(TPO_DESC, "V")
+array.push(TPO_DESC, "W")
+array.push(TPO_DESC, "X")
+array.push(TPO_DESC, "a")
+array.push(TPO_DESC, "b")
+array.push(TPO_DESC, "c")
+array.push(TPO_DESC, "d")
+array.push(TPO_DESC, "e")
+array.push(TPO_DESC, "f")
+array.push(TPO_DESC, "g")
+array.push(TPO_DESC, "h")
+array.push(TPO_DESC, "i")
+array.push(TPO_DESC, "j")
+array.push(TPO_DESC, "k")
+array.push(TPO_DESC, "l")
+array.push(TPO_DESC, "m")
+array.push(TPO_DESC, "n")
+array.push(TPO_DESC, "o")
+array.push(TPO_DESC, "p")
+array.push(TPO_DESC, "q")
+array.push(TPO_DESC, "r")
+array.push(TPO_DESC, "s")
+array.push(TPO_DESC, "t")
+array.push(TPO_DESC, "u")
+array.push(TPO_DESC, "v")
+array.push(TPO_DESC, "w")
+array.push(TPO_DESC, "x")
+
+if showTPOInfo == true and timeframe.isminutes and timeframe.multiplier < 31 and showMarketBreadth == true
+    if rthOpenSess
+        //reset counter back to 0
+        count := 0
+            
+        table.cell(breadthTable, 0, 0, "TPO Period: " + array.get(TPO_DESC, count), text_size = textSize, text_color = #000000, bgcolor = color.white)
+        
+    //create a new line when a new 30 min time period starts
+    if not rthOpenSess and (minute == 00 or minute == 30) and count < 45
+        
+         //increment count
+        count := count + 1
+        
+        table.cell(breadthTable, 0, 0, "TPO Period: " + array.get(TPO_DESC, count), text_size = textSize, text_color = #000000, bgcolor = color.white)
+        
+    table.cell(breadthTable, 0, 1, "Time Left: " + str.tostring(minsLeft) + ":" + str.tostring(secsLeft, secsFormat), text_size = textSize, text_color = #000000, bgcolor = color.white)
